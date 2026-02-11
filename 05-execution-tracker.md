@@ -25,7 +25,7 @@
 | TW-1.2 | NestJS API skeleton | Codex + User | - | - | Completed (Scaffolded) | Pending | Pending | Health endpoint and baseline test scaffold added |
 | TW-1.3 | Next.js responsive dashboard shell | Codex + User | - | - | Completed (Scaffolded) | Pending | Pending | Includes all approved dashboard sections with responsive layout |
 | TW-1.4 | CI checks setup | Codex + User | - | - | Completed (Scaffolded) | Pending | Pending | GitHub Actions workflow added for lint/test/build |
-| TW-2.1 | Core HR module | Codex + User | codex/gw-2-tw-2.1 | Pending | In Review | Pending | Pending | Core HR API + UI slice implemented; preparing PR |
+| TW-2.1 | Core HR module | Codex + User | codex/gw-2-tw-2.1 | #1 (Merged) | Completed | Passed | Approved/Merged | Core HR API + UI slice merged to main |
 | TW-2.2 | Attendance and shifts module | Codex + User | - | - | Not Started | Pending | Pending | |
 | TW-2.3 | Leave module | Codex + User | - | - | Not Started | Pending | Pending | |
 | TW-2.4 | Timesheet module | Codex + User | - | - | Not Started | Pending | Pending | |
