@@ -1,0 +1,19 @@
+{
+  "name": "hr-management-system",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w web",
+    "dev:api": "npm run start:dev -w api",
+    "lint": "npm run lint -ws --if-present",
+    "test": "npm run test -ws --if-present",
+    "build": "npm run build -ws --if-present"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@hr/shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "lint": "echo \"shared lint placeholder\"",
+    "test": "echo \"shared test placeholder\"",
+    "build": "echo \"shared build placeholder\""
+  }
+}
