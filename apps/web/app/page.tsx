@@ -27,15 +27,33 @@ export default function HomePage() {
       <aside className="sidebar">
         <div className="brand">HR Manager</div>
         <nav>
-          <a className="nav-item active">Dashboard</a>
-          <a className="nav-item">Core HR</a>
-          <a className="nav-item">Attendance & Time</a>
-          <a className="nav-item">Leave Management</a>
-          <a className="nav-item">Payroll</a>
-          <a className="nav-item">Recruitment</a>
-          <a className="nav-item">Analytics</a>
-          <a className="nav-item">Documents</a>
-          <a className="nav-item">Settings</a>
+          <a className="nav-item active" href="/">
+            Dashboard
+          </a>
+          <a className="nav-item" href="/core-hr">
+            Core HR
+          </a>
+          <a className="nav-item" href="#">
+            Attendance & Time
+          </a>
+          <a className="nav-item" href="#">
+            Leave Management
+          </a>
+          <a className="nav-item" href="#">
+            Payroll
+          </a>
+          <a className="nav-item" href="#">
+            Recruitment
+          </a>
+          <a className="nav-item" href="#">
+            Analytics
+          </a>
+          <a className="nav-item" href="#">
+            Documents
+          </a>
+          <a className="nav-item" href="#">
+            Settings
+          </a>
         </nav>
       </aside>
 

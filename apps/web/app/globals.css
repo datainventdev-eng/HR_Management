@@ -256,3 +256,70 @@ small {
     text-align: right;
   }
 }
+
+.core-hr-page {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.core-hr-actions {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.core-hr-actions button,
+.form-grid button,
+.row-actions button {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #eef2ff;
+  color: #1e3a8a;
+  cursor: pointer;
+}
+
+.core-hr-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-grid {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.form-grid input,
+.form-grid select {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 10px;
+}
+
+.simple-list {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.simple-list li {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.row-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .core-hr-grid {
+    grid-template-columns: 1fr;
+  }
+}
