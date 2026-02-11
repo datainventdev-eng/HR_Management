@@ -33,7 +33,7 @@ export default function HomePage() {
           <a className="nav-item" href="/core-hr">
             Core HR
           </a>
-          <a className="nav-item" href="#">
+          <a className="nav-item" href="/attendance-time">
             Attendance & Time
           </a>
           <a className="nav-item" href="#">
