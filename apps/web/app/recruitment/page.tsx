@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { getSession } from '../lib.session';
 
 type Job = { id: string; title: string; department: string; location: string; status: 'open' | 'closed' };
 type Candidate = { id: string; name: string; jobId: string; stage: string };
@@ -29,10 +30,12 @@ export default function RecruitmentPage() {
   const [offerStatusForm, setOfferStatusForm] = useState({ offerId: '', status: 'Sent' as 'Draft' | 'Sent' | 'Accepted' | 'Declined' });
 
   async function callApi(path: string, init?: RequestInit, role: 'hr_admin' | 'manager' = 'hr_admin') {
+    const session = getSession();
     const response = await fetch(`${apiBase}${path}`, {
       ...init,
       headers: {
         'Content-Type': 'application/json',
+        ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
         'x-role': role,
         'x-employee-id': 'mgr_demo_1',
         ...(init?.headers || {}),
@@ -46,9 +49,14 @@ export default function RecruitmentPage() {
 
   async function refreshAll() {
     try {
-      const [jobList, candidateList] = await Promise.all([callApi('/recruitment/jobs'), callApi('/recruitment/candidates')]);
+      const [jobList, candidateList, offerList] = await Promise.all([
+        callApi('/recruitment/jobs'),
+        callApi('/recruitment/candidates'),
+        callApi('/recruitment/offers'),
+      ]);
       setJobs(jobList);
       setCandidates(candidateList);
+      setOffers(offerList);
       setMessage('Recruitment data refreshed.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to refresh recruitment data.');
@@ -125,8 +133,8 @@ export default function RecruitmentPage() {
   async function createOffer(event: FormEvent) {
     event.preventDefault();
     try {
-      const offer = await callApi('/recruitment/offers', { method: 'POST', body: JSON.stringify(offerForm) });
-      setOffers((prev) => [offer, ...prev]);
+      await callApi('/recruitment/offers', { method: 'POST', body: JSON.stringify(offerForm) });
+      await refreshAll();
       setMessage('Offer created.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to create offer.');
@@ -136,8 +144,8 @@ export default function RecruitmentPage() {
   async function updateOfferStatus(event: FormEvent) {
     event.preventDefault();
     try {
-      const updated = await callApi('/recruitment/offers/status', { method: 'POST', body: JSON.stringify(offerStatusForm) });
-      setOffers((prev) => prev.map((offer) => (offer.id === updated.id ? updated : offer)));
+      await callApi('/recruitment/offers/status', { method: 'POST', body: JSON.stringify(offerStatusForm) });
+      await refreshAll();
       setMessage('Offer status updated.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to update offer status.');
@@ -153,6 +161,10 @@ export default function RecruitmentPage() {
       setMessage(error instanceof Error ? error.message : 'Failed to convert candidate.');
     }
   }
+
+  useEffect(() => {
+    refreshAll();
+  }, []);
 
   return (
     <main className="recruitment-page">

@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { getSession } from '../lib.session';
 
 type PolicyDoc = { id: string; title: string; fileName: string; published: boolean };
 type EmployeeDoc = { id: string; employeeId: string; name: string; fileName: string; expiresOn?: string };
@@ -18,10 +19,12 @@ export default function DocumentsPage() {
   const [docForm, setDocForm] = useState({ employeeId: 'emp_demo_1', name: 'Passport', fileName: 'passport.pdf', expiresOn: '' });
 
   async function callApi(path: string, init?: RequestInit, role: 'hr_admin' | 'employee' = 'hr_admin', id?: string) {
+    const session = getSession();
     const response = await fetch(`${apiBase}${path}`, {
       ...init,
       headers: {
         'Content-Type': 'application/json',
+        ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
         'x-role': role,
         'x-employee-id': id || employeeId,
         ...(init?.headers || {}),
@@ -82,6 +85,10 @@ export default function DocumentsPage() {
       setMessage(error instanceof Error ? error.message : 'Failed to upload employee document.');
     }
   }
+
+  useEffect(() => {
+    refreshAll();
+  }, []);
 
   return (
     <main className="documents-page">

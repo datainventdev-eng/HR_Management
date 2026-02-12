@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { getSession } from '../lib.session';
 
 type AttendanceRecord = {
   id: string;
@@ -41,10 +42,12 @@ export default function AttendanceTimePage() {
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
 
   async function callApi(path: string, init?: RequestInit, role: 'employee' | 'hr_admin' = 'hr_admin') {
+    const session = getSession();
     const response = await fetch(`${apiBase}${path}`, {
       ...init,
       headers: {
         'Content-Type': 'application/json',
+        ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
         'x-role': role,
         'x-employee-id': employeeId,
         ...(init?.headers || {}),
@@ -148,6 +151,10 @@ export default function AttendanceTimePage() {
       setMessage(error instanceof Error ? error.message : 'Check-out failed.');
     }
   }
+
+  useEffect(() => {
+    refreshAll();
+  }, []);
 
   return (
     <main className="attendance-page">

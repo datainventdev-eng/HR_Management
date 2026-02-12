@@ -1,21 +1,79 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { PayrollEntry, PayrollRole, Payslip, SalaryComponent } from './payroll.types';
 import { OpsService } from '../ops/ops.service';
+import { DatabaseService } from '../database/database.service';
 
 interface PayrollContext {
   role: PayrollRole;
   employeeId?: string;
 }
 
+interface DbComponent {
+  id: string;
+  employee_id: string;
+  type: 'earning' | 'deduction';
+  name: string;
+  amount: number;
+  effective_from: string;
+}
+
+interface DbEntry {
+  employee_id: string;
+  month: string;
+  gross: number;
+  deductions: number;
+  net: number;
+  status: 'Draft' | 'Finalized';
+}
+
 @Injectable()
-export class PayrollService {
-  private readonly components: SalaryComponent[] = [];
-  private readonly payrollEntries: PayrollEntry[] = [];
-  private readonly payslips: Payslip[] = [];
+export class PayrollService implements OnModuleInit {
+  constructor(
+    private readonly opsService: OpsService,
+    private readonly db: DatabaseService,
+  ) {}
 
-  constructor(private readonly opsService: OpsService) {}
+  async onModuleInit() {
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS payroll_components (
+        id TEXT PRIMARY KEY,
+        employee_id TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('earning','deduction')),
+        name TEXT NOT NULL,
+        amount NUMERIC(12,2) NOT NULL CHECK (amount >= 0),
+        effective_from DATE NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
 
-  addComponent(
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS payroll_entries (
+        employee_id TEXT NOT NULL,
+        month TEXT NOT NULL,
+        gross NUMERIC(12,2) NOT NULL,
+        deductions NUMERIC(12,2) NOT NULL,
+        net NUMERIC(12,2) NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('Draft','Finalized')),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (employee_id, month)
+      );
+    `);
+
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS payroll_payslips (
+        id TEXT PRIMARY KEY,
+        employee_id TEXT NOT NULL,
+        month TEXT NOT NULL,
+        gross NUMERIC(12,2) NOT NULL,
+        deductions NUMERIC(12,2) NOT NULL,
+        net NUMERIC(12,2) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_payroll_payslip UNIQUE (employee_id, month)
+      );
+    `);
+  }
+
+  async addComponent(
     ctx: PayrollContext,
     payload: { employeeId: string; type: 'earning' | 'deduction'; name: string; amount: number; effectiveFrom: string },
   ) {
@@ -29,19 +87,39 @@ export class PayrollService {
       ...payload,
     };
 
-    this.components.push(component);
+    await this.db.query(
+      `
+      INSERT INTO payroll_components (id, employee_id, type, name, amount, effective_from)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      [component.id, component.employeeId, component.type, component.name, component.amount, component.effectiveFrom],
+    );
+
     return component;
   }
 
-  listComponents(ctx: PayrollContext, employeeId?: string) {
+  async listComponents(ctx: PayrollContext, employeeId?: string) {
     const targetId = ctx.role === 'employee' ? ctx.employeeId : employeeId;
-    if (!targetId) {
-      return this.components;
-    }
-    return this.components.filter((component) => component.employeeId === targetId);
+    const result = targetId
+      ? await this.db.query<DbComponent>(
+          `SELECT id, employee_id, type, name, amount, effective_from FROM payroll_components WHERE employee_id = $1 ORDER BY effective_from DESC`,
+          [targetId],
+        )
+      : await this.db.query<DbComponent>(
+          `SELECT id, employee_id, type, name, amount, effective_from FROM payroll_components ORDER BY employee_id ASC, effective_from DESC`,
+        );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      employeeId: row.employee_id,
+      type: row.type,
+      name: row.name,
+      amount: Number(row.amount),
+      effectiveFrom: row.effective_from,
+    }));
   }
 
-  runDraft(ctx: PayrollContext, payload: { month: string; employeeIds: string[] }) {
+  async runDraft(ctx: PayrollContext, payload: { month: string; employeeIds: string[] }) {
     this.assertHrAdmin(ctx);
 
     const month = payload.month;
@@ -52,39 +130,49 @@ export class PayrollService {
     const results: PayrollEntry[] = [];
 
     for (const employeeId of payload.employeeIds) {
-      const finalizedExists = this.payrollEntries.some(
-        (entry) => entry.employeeId === employeeId && entry.month === month && entry.status === 'Finalized',
+      const existing = await this.db.query<DbEntry>(
+        `SELECT employee_id, month, gross, deductions, net, status FROM payroll_entries WHERE employee_id = $1 AND month = $2 LIMIT 1`,
+        [employeeId, month],
       );
 
-      if (finalizedExists) {
+      if (existing.rows[0]?.status === 'Finalized') {
         throw new BadRequestException(`Payroll is already finalized for employee ${employeeId} in ${month}.`);
       }
 
-      const employeeComponents = this.components.filter((component) => component.employeeId === employeeId);
-      const gross = employeeComponents.filter((c) => c.type === 'earning').reduce((sum, c) => sum + c.amount, 0);
-      const deductions = employeeComponents.filter((c) => c.type === 'deduction').reduce((sum, c) => sum + c.amount, 0);
-
-      const existingDraft = this.payrollEntries.find(
-        (entry) => entry.employeeId === employeeId && entry.month === month && entry.status === 'Draft',
+      const componentRows = await this.db.query<{ type: 'earning' | 'deduction'; amount: number }>(
+        `SELECT type, amount FROM payroll_components WHERE employee_id = $1`,
+        [employeeId],
       );
+      const gross = componentRows.rows.filter((c) => c.type === 'earning').reduce((sum, c) => sum + Number(c.amount), 0);
+      const deductions = componentRows.rows
+        .filter((c) => c.type === 'deduction')
+        .reduce((sum, c) => sum + Number(c.amount), 0);
+      const net = gross - deductions;
 
-      if (existingDraft) {
-        existingDraft.gross = gross;
-        existingDraft.deductions = deductions;
-        existingDraft.net = gross - deductions;
-        results.push(existingDraft);
+      if (existing.rows[0]) {
+        await this.db.query(
+          `
+          UPDATE payroll_entries
+          SET gross = $3,
+              deductions = $4,
+              net = $5,
+              status = 'Draft',
+              updated_at = NOW()
+          WHERE employee_id = $1 AND month = $2
+          `,
+          [employeeId, month, gross, deductions, net],
+        );
       } else {
-        const entry: PayrollEntry = {
-          employeeId,
-          month,
-          gross,
-          deductions,
-          net: gross - deductions,
-          status: 'Draft',
-        };
-        this.payrollEntries.push(entry);
-        results.push(entry);
+        await this.db.query(
+          `
+          INSERT INTO payroll_entries (employee_id, month, gross, deductions, net, status, updated_at)
+          VALUES ($1, $2, $3, $4, $5, 'Draft', NOW())
+          `,
+          [employeeId, month, gross, deductions, net],
+        );
       }
+
+      results.push({ employeeId, month, gross, deductions, net, status: 'Draft' });
     }
 
     return results;
@@ -96,36 +184,37 @@ export class PayrollService {
     const finalized: PayrollEntry[] = [];
 
     for (const employeeId of payload.employeeIds) {
-      const entry = this.payrollEntries.find(
-        (item) => item.employeeId === employeeId && item.month === payload.month && item.status === 'Draft',
+      const entryResult = await this.db.query<DbEntry>(
+        `SELECT employee_id, month, gross, deductions, net, status FROM payroll_entries WHERE employee_id = $1 AND month = $2 LIMIT 1`,
+        [employeeId, payload.month],
       );
 
-      if (!entry) {
+      const entry = entryResult.rows[0];
+      if (!entry || entry.status !== 'Draft') {
         throw new BadRequestException(`Draft payroll not found for employee ${employeeId} in ${payload.month}.`);
       }
 
-      const duplicateFinalized = this.payrollEntries.some(
-        (item) => item.employeeId === employeeId && item.month === payload.month && item.status === 'Finalized',
-      );
+      await this.db.transaction(async (query) => {
+        await query(
+          `
+          UPDATE payroll_entries
+          SET status = 'Finalized',
+              updated_at = NOW()
+          WHERE employee_id = $1 AND month = $2
+          `,
+          [employeeId, payload.month],
+        );
 
-      if (duplicateFinalized) {
-        throw new BadRequestException(`Payroll already finalized for employee ${employeeId} in ${payload.month}.`);
-      }
-
-      entry.status = 'Finalized';
-      finalized.push(entry);
-
-      const existingPayslip = this.payslips.find((p) => p.employeeId === employeeId && p.month === payload.month);
-      if (!existingPayslip) {
-        this.payslips.push({
-          id: this.id('ps'),
-          employeeId,
-          month: payload.month,
-          gross: entry.gross,
-          deductions: entry.deductions,
-          net: entry.net,
-        });
-      }
+        await query(
+          `
+          INSERT INTO payroll_payslips (id, employee_id, month, gross, deductions, net)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          ON CONFLICT (employee_id, month)
+          DO NOTHING
+          `,
+          [this.id('ps'), employeeId, payload.month, entry.gross, entry.deductions, entry.net],
+        );
+      });
 
       await this.opsService.addNotification({
         userId: employeeId,
@@ -138,75 +227,116 @@ export class PayrollService {
         action: 'payroll.finalized',
         entity: 'payroll_entry',
         entityId: `${employeeId}:${payload.month}`,
-        metadata: { net: entry.net },
+        metadata: { net: Number(entry.net) },
+      });
+
+      finalized.push({
+        employeeId,
+        month: payload.month,
+        gross: Number(entry.gross),
+        deductions: Number(entry.deductions),
+        net: Number(entry.net),
+        status: 'Finalized',
       });
     }
 
     return finalized;
   }
 
-  listPayrollEntries(ctx: PayrollContext, query?: { month?: string; employeeId?: string }) {
-    let list = this.payrollEntries;
+  async listPayrollEntries(ctx: PayrollContext, query?: { month?: string; employeeId?: string }) {
+    const where: string[] = [];
+    const params: unknown[] = [];
 
     if (ctx.role === 'employee') {
-      list = list.filter((entry) => entry.employeeId === ctx.employeeId);
+      where.push(`employee_id = $${params.push(ctx.employeeId ?? '')}`);
     }
 
     if (query?.month) {
-      list = list.filter((entry) => entry.month === query.month);
+      where.push(`month = $${params.push(query.month)}`);
     }
 
     if (query?.employeeId && ctx.role !== 'employee') {
-      list = list.filter((entry) => entry.employeeId === query.employeeId);
+      where.push(`employee_id = $${params.push(query.employeeId)}`);
     }
 
-    return list;
+    const sql = `
+      SELECT employee_id, month, gross, deductions, net, status
+      FROM payroll_entries
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+      ORDER BY month DESC, employee_id ASC
+    `;
+
+    const result = await this.db.query<DbEntry>(sql, params);
+    return result.rows.map((row) => ({
+      employeeId: row.employee_id,
+      month: row.month,
+      gross: Number(row.gross),
+      deductions: Number(row.deductions),
+      net: Number(row.net),
+      status: row.status,
+    }));
   }
 
-  listPayslips(ctx: PayrollContext, employeeId?: string) {
+  async listPayslips(ctx: PayrollContext, employeeId?: string) {
     const targetId = ctx.role === 'employee' ? ctx.employeeId : employeeId;
-    if (!targetId) {
-      return this.payslips;
-    }
-    return this.payslips.filter((payslip) => payslip.employeeId === targetId);
+    const result = targetId
+      ? await this.db.query<{ id: string; employee_id: string; month: string; gross: number; deductions: number; net: number }>(
+          `SELECT id, employee_id, month, gross, deductions, net FROM payroll_payslips WHERE employee_id = $1 ORDER BY month DESC`,
+          [targetId],
+        )
+      : await this.db.query<{ id: string; employee_id: string; month: string; gross: number; deductions: number; net: number }>(
+          `SELECT id, employee_id, month, gross, deductions, net FROM payroll_payslips ORDER BY month DESC, employee_id ASC`,
+        );
+
+    return result.rows.map((row): Payslip => ({
+      id: row.id,
+      employeeId: row.employee_id,
+      month: row.month,
+      gross: Number(row.gross),
+      deductions: Number(row.deductions),
+      net: Number(row.net),
+    }));
   }
 
-  monthlySummary(ctx: PayrollContext, month: string) {
+  async monthlySummary(ctx: PayrollContext, month: string) {
     this.assertHrAdmin(ctx);
-    const monthly = this.payrollEntries.filter((entry) => entry.month === month && entry.status === 'Finalized');
+    const result = await this.db.query<{ total_gross: string; total_deductions: string; total_net: string; employee_count: string }>(
+      `
+      SELECT COALESCE(SUM(gross), 0)::text AS total_gross,
+             COALESCE(SUM(deductions), 0)::text AS total_deductions,
+             COALESCE(SUM(net), 0)::text AS total_net,
+             COUNT(*)::text AS employee_count
+      FROM payroll_entries
+      WHERE month = $1 AND status = 'Finalized'
+      `,
+      [month],
+    );
 
     return {
       month,
-      totalGross: monthly.reduce((sum, row) => sum + row.gross, 0),
-      totalDeductions: monthly.reduce((sum, row) => sum + row.deductions, 0),
-      totalNet: monthly.reduce((sum, row) => sum + row.net, 0),
-      employeeCount: monthly.length,
+      totalGross: Number(result.rows[0]?.total_gross || '0'),
+      totalDeductions: Number(result.rows[0]?.total_deductions || '0'),
+      totalNet: Number(result.rows[0]?.total_net || '0'),
+      employeeCount: Number(result.rows[0]?.employee_count || '0'),
     };
   }
 
-  seedDemoData() {
-    if (this.components.length === 0) {
-      this.components.push(
-        {
-          id: this.id('sc'),
-          employeeId: 'emp_demo_1',
-          type: 'earning',
-          name: 'Basic Salary',
-          amount: 2000,
-          effectiveFrom: '2026-01-01',
-        },
-        {
-          id: this.id('sc'),
-          employeeId: 'emp_demo_1',
-          type: 'deduction',
-          name: 'Tax',
-          amount: 200,
-          effectiveFrom: '2026-01-01',
-        },
+  async seedDemoData() {
+    const count = await this.db.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM payroll_components`);
+    if (Number(count.rows[0]?.count || '0') === 0) {
+      await this.db.query(
+        `
+        INSERT INTO payroll_components (id, employee_id, type, name, amount, effective_from)
+        VALUES
+          ($1, 'emp_demo_1', 'earning', 'Basic Salary', 2000, '2026-01-01'),
+          ($2, 'emp_demo_1', 'deduction', 'Tax', 200, '2026-01-01')
+        `,
+        [this.id('sc'), this.id('sc')],
       );
     }
 
-    return { message: 'Payroll demo baseline is ready.', componentCount: this.components.length };
+    const total = await this.db.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM payroll_components`);
+    return { message: 'Payroll demo baseline is ready.', componentCount: Number(total.rows[0]?.count || '0') };
   }
 
   private assertHrAdmin(ctx: PayrollContext) {

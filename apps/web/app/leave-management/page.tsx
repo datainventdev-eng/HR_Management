@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { getSession } from '../lib.session';
 
 type LeaveType = { id: string; name: string; paid: boolean; annualLimit?: number };
 type Balance = {
@@ -42,10 +43,12 @@ export default function LeaveManagementPage() {
   const [decisionForm, setDecisionForm] = useState({ requestId: '', decision: 'Approved' as 'Approved' | 'Rejected', managerComment: '' });
 
   async function callApi(path: string, init?: RequestInit, role: 'employee' | 'manager' | 'hr_admin' = 'hr_admin', userId?: string) {
+    const session = getSession();
     const response = await fetch(`${apiBase}${path}`, {
       ...init,
       headers: {
         'Content-Type': 'application/json',
+        ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
         'x-role': role,
         'x-employee-id': userId || employeeId,
         ...(init?.headers || {}),
@@ -141,6 +144,10 @@ export default function LeaveManagementPage() {
       setMessage(error instanceof Error ? error.message : 'Failed to update request decision.');
     }
   }
+
+  useEffect(() => {
+    refreshAll();
+  }, []);
 
   return (
     <main className="leave-page">

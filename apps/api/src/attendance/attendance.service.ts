@@ -1,32 +1,106 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { AttendanceRecord, AttendanceRole, OfficeHours, Shift, ShiftAssignment } from './attendance.types';
+import { DatabaseService } from '../database/database.service';
 
 interface AttendanceContext {
   role: AttendanceRole;
   employeeId?: string;
 }
 
+interface DbAttendanceRecord {
+  id: string;
+  employee_id: string;
+  date: string;
+  check_in_time: string | null;
+  check_out_time: string | null;
+  total_hours: number | null;
+  is_late: boolean;
+  left_early: boolean;
+}
+
 @Injectable()
-export class AttendanceService {
-  private readonly attendance: AttendanceRecord[] = [];
-  private readonly shifts: Shift[] = [];
-  private readonly assignments: ShiftAssignment[] = [];
-  private officeHours: OfficeHours = {
-    startTime: '09:00',
-    endTime: '18:00',
-  };
+export class AttendanceService implements OnModuleInit {
+  constructor(private readonly db: DatabaseService) {}
 
-  setOfficeHours(ctx: AttendanceContext, payload: OfficeHours) {
+  async onModuleInit() {
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS attendance_office_hours (
+        id TEXT PRIMARY KEY,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await this.db.query(`
+      INSERT INTO attendance_office_hours (id, start_time, end_time)
+      VALUES ('default', '09:00', '18:00')
+      ON CONFLICT (id) DO NOTHING;
+    `);
+
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS attendance_shifts (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS attendance_shift_assignments (
+        id TEXT PRIMARY KEY,
+        employee_id TEXT NOT NULL,
+        shift_id TEXT NOT NULL,
+        from_date DATE NOT NULL,
+        to_date DATE NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT fk_attendance_shift FOREIGN KEY (shift_id) REFERENCES attendance_shifts(id)
+      );
+    `);
+
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS attendance_records (
+        id TEXT PRIMARY KEY,
+        employee_id TEXT NOT NULL,
+        date DATE NOT NULL,
+        check_in_time TEXT,
+        check_out_time TEXT,
+        total_hours NUMERIC(6,2),
+        is_late BOOLEAN NOT NULL DEFAULT FALSE,
+        left_early BOOLEAN NOT NULL DEFAULT FALSE,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_attendance_employee_day UNIQUE (employee_id, date)
+      );
+    `);
+  }
+
+  async setOfficeHours(ctx: AttendanceContext, payload: OfficeHours) {
     this.assertHrAdmin(ctx);
-    this.officeHours = payload;
-    return this.officeHours;
+    await this.db.query(
+      `
+      UPDATE attendance_office_hours
+      SET start_time = $2, end_time = $3, updated_at = NOW()
+      WHERE id = $1
+      `,
+      ['default', payload.startTime, payload.endTime],
+    );
+    return payload;
   }
 
-  getOfficeHours() {
-    return this.officeHours;
+  async getOfficeHours() {
+    const result = await this.db.query<{ start_time: string; end_time: string }>(
+      `SELECT start_time, end_time FROM attendance_office_hours WHERE id = 'default' LIMIT 1`,
+    );
+    const row = result.rows[0] ?? { start_time: '09:00', end_time: '18:00' };
+    return {
+      startTime: row.start_time,
+      endTime: row.end_time,
+    };
   }
 
-  createShift(ctx: AttendanceContext, payload: { name: string; startTime: string; endTime: string }) {
+  async createShift(ctx: AttendanceContext, payload: { name: string; startTime: string; endTime: string }) {
     this.assertHrAdmin(ctx);
     if (!payload.name?.trim()) {
       throw new BadRequestException('Shift name is required.');
@@ -39,15 +113,29 @@ export class AttendanceService {
       endTime: payload.endTime,
     };
 
-    this.shifts.push(shift);
+    await this.db.query(`INSERT INTO attendance_shifts (id, name, start_time, end_time) VALUES ($1, $2, $3, $4)`, [
+      shift.id,
+      shift.name,
+      shift.startTime,
+      shift.endTime,
+    ]);
+
     return shift;
   }
 
-  listShifts() {
-    return this.shifts;
+  async listShifts() {
+    const result = await this.db.query<{ id: string; name: string; start_time: string; end_time: string }>(
+      `SELECT id, name, start_time, end_time FROM attendance_shifts ORDER BY name ASC`,
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      startTime: row.start_time,
+      endTime: row.end_time,
+    }));
   }
 
-  assignShift(
+  async assignShift(
     ctx: AttendanceContext,
     payload: {
       employeeId: string;
@@ -58,7 +146,8 @@ export class AttendanceService {
   ) {
     this.assertHrAdmin(ctx);
 
-    if (!this.shifts.some((shift) => shift.id === payload.shiftId)) {
+    const shift = await this.db.query<{ id: string }>(`SELECT id FROM attendance_shifts WHERE id = $1 LIMIT 1`, [payload.shiftId]);
+    if (!shift.rows[0]) {
       throw new BadRequestException('Shift does not exist.');
     }
 
@@ -71,26 +160,33 @@ export class AttendanceService {
       ...payload,
     };
 
-    this.assignments.push(assignment);
+    await this.db.query(
+      `
+      INSERT INTO attendance_shift_assignments (id, employee_id, shift_id, from_date, to_date)
+      VALUES ($1, $2, $3, $4, $5)
+      `,
+      [assignment.id, assignment.employeeId, assignment.shiftId, assignment.fromDate, assignment.toDate],
+    );
+
     return assignment;
   }
 
-  listAssignments(ctx: AttendanceContext, employeeId?: string) {
+  async listAssignments(ctx: AttendanceContext, employeeId?: string) {
     if (ctx.role === 'employee') {
       if (!ctx.employeeId) {
         throw new UnauthorizedException('Employee context is missing.');
       }
-      return this.assignments.filter((assignment) => assignment.employeeId === ctx.employeeId);
+      return this.fetchAssignments(ctx.employeeId);
     }
 
     if (ctx.role === 'manager') {
-      return employeeId ? this.assignments.filter((assignment) => assignment.employeeId === employeeId) : [];
+      return employeeId ? this.fetchAssignments(employeeId) : [];
     }
 
-    return employeeId ? this.assignments.filter((assignment) => assignment.employeeId === employeeId) : this.assignments;
+    return employeeId ? this.fetchAssignments(employeeId) : this.fetchAssignments();
   }
 
-  checkIn(ctx: AttendanceContext, payload?: { date?: string; time?: string }) {
+  async checkIn(ctx: AttendanceContext, payload?: { date?: string; time?: string }) {
     if (!ctx.employeeId) {
       throw new UnauthorizedException('Employee context is missing.');
     }
@@ -101,31 +197,53 @@ export class AttendanceService {
 
     const date = payload?.date ?? this.today();
     const time = payload?.time ?? this.currentTime();
+    const officeHours = await this.getOfficeHours();
 
-    let record = this.attendance.find((entry) => entry.employeeId === ctx.employeeId && entry.date === date);
+    const existing = await this.db.query<DbAttendanceRecord>(
+      `SELECT * FROM attendance_records WHERE employee_id = $1 AND date = $2 LIMIT 1`,
+      [ctx.employeeId, date],
+    );
 
-    if (record?.checkInTime) {
+    const record = existing.rows[0];
+    if (record?.check_in_time) {
       throw new BadRequestException('You already checked in for this day.');
     }
 
     if (!record) {
-      record = {
+      const created: AttendanceRecord = {
         id: this.id('att'),
         employeeId: ctx.employeeId,
         date,
-        isLate: this.isAfter(time, this.officeHours.startTime),
+        checkInTime: time,
+        isLate: this.isAfter(time, officeHours.startTime),
         leftEarly: false,
       };
-      this.attendance.push(record);
+
+      await this.db.query(
+        `
+        INSERT INTO attendance_records (id, employee_id, date, check_in_time, is_late, left_early, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        `,
+        [created.id, created.employeeId, created.date, created.checkInTime, created.isLate, created.leftEarly],
+      );
+
+      return created;
     }
 
-    record.checkInTime = time;
-    record.isLate = this.isAfter(time, this.officeHours.startTime);
+    await this.db.query(
+      `
+      UPDATE attendance_records
+      SET check_in_time = $3, is_late = $4, updated_at = NOW()
+      WHERE id = $1 AND employee_id = $2
+      `,
+      [record.id, ctx.employeeId, time, this.isAfter(time, officeHours.startTime)],
+    );
 
-    return record;
+    const refreshed = await this.db.query<DbAttendanceRecord>(`SELECT * FROM attendance_records WHERE id = $1 LIMIT 1`, [record.id]);
+    return this.mapRecord(refreshed.rows[0]);
   }
 
-  checkOut(ctx: AttendanceContext, payload?: { date?: string; time?: string }) {
+  async checkOut(ctx: AttendanceContext, payload?: { date?: string; time?: string }) {
     if (!ctx.employeeId) {
       throw new UnauthorizedException('Employee context is missing.');
     }
@@ -136,24 +254,42 @@ export class AttendanceService {
 
     const date = payload?.date ?? this.today();
     const time = payload?.time ?? this.currentTime();
-    const record = this.attendance.find((entry) => entry.employeeId === ctx.employeeId && entry.date === date);
+    const officeHours = await this.getOfficeHours();
 
-    if (!record?.checkInTime) {
+    const result = await this.db.query<DbAttendanceRecord>(
+      `SELECT * FROM attendance_records WHERE employee_id = $1 AND date = $2 LIMIT 1`,
+      [ctx.employeeId, date],
+    );
+
+    const record = result.rows[0];
+    if (!record?.check_in_time) {
       throw new BadRequestException('Check-in is required before check-out.');
     }
 
-    if (record.checkOutTime) {
+    if (record.check_out_time) {
       throw new BadRequestException('You already checked out for this day.');
     }
 
-    record.checkOutTime = time;
-    record.leftEarly = this.isBefore(time, this.officeHours.endTime);
-    record.totalHours = this.hoursBetween(record.checkInTime, time);
+    const leftEarly = this.isBefore(time, officeHours.endTime);
+    const totalHours = this.hoursBetween(record.check_in_time, time);
 
-    return record;
+    await this.db.query(
+      `
+      UPDATE attendance_records
+      SET check_out_time = $3,
+          left_early = $4,
+          total_hours = $5,
+          updated_at = NOW()
+      WHERE id = $1 AND employee_id = $2
+      `,
+      [record.id, ctx.employeeId, time, leftEarly, totalHours],
+    );
+
+    const refreshed = await this.db.query<DbAttendanceRecord>(`SELECT * FROM attendance_records WHERE id = $1 LIMIT 1`, [record.id]);
+    return this.mapRecord(refreshed.rows[0]);
   }
 
-  monthlyAttendance(ctx: AttendanceContext, payload?: { employeeId?: string; month?: string }) {
+  async monthlyAttendance(ctx: AttendanceContext, payload?: { employeeId?: string; month?: string }) {
     const month = payload?.month ?? this.today().slice(0, 7);
 
     let targetEmployeeId = payload?.employeeId;
@@ -166,28 +302,55 @@ export class AttendanceService {
       throw new BadRequestException('Employee ID is required for this view.');
     }
 
-    return this.attendance.filter((record) => record.employeeId === targetEmployeeId && record.date.startsWith(month));
+    const result = await this.db.query<DbAttendanceRecord>(
+      `
+      SELECT *
+      FROM attendance_records
+      WHERE employee_id = $1
+        AND TO_CHAR(date, 'YYYY-MM') = $2
+      ORDER BY date ASC
+      `,
+      [targetEmployeeId, month],
+    );
+
+    return result.rows.map((row) => this.mapRecord(row));
   }
 
-  seedDemoData() {
-    if (this.shifts.length === 0) {
-      this.shifts.push({ id: this.id('shift'), name: 'General', startTime: '09:00', endTime: '18:00' });
+  async seedDemoData() {
+    const result = await this.db.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM attendance_shifts`);
+    if (Number(result.rows[0]?.count || '0') === 0) {
+      await this.db.query(`
+        INSERT INTO attendance_shifts (id, name, start_time, end_time)
+        VALUES ($1, 'General', '09:00', '18:00')
+      `, [this.id('shift')]);
     }
+
+    const shiftCountResult = await this.db.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM attendance_shifts`);
 
     return {
       message: 'Attendance demo baseline is ready.',
-      shiftCount: this.shifts.length,
-      officeHours: this.officeHours,
+      shiftCount: Number(shiftCountResult.rows[0]?.count || '0'),
+      officeHours: await this.getOfficeHours(),
     };
   }
 
-  todaySummary(date = this.today()) {
-    const rows = this.attendance.filter((record) => record.date === date);
+  async todaySummary(date = this.today()) {
+    const result = await this.db.query<{ present_count: string; late_count: string; early_leave_count: string }>(
+      `
+      SELECT COUNT(*) FILTER (WHERE check_in_time IS NOT NULL)::text AS present_count,
+             COUNT(*) FILTER (WHERE is_late = TRUE)::text AS late_count,
+             COUNT(*) FILTER (WHERE left_early = TRUE)::text AS early_leave_count
+      FROM attendance_records
+      WHERE date = $1
+      `,
+      [date],
+    );
+
     return {
       date,
-      presentCount: rows.filter((row) => Boolean(row.checkInTime)).length,
-      lateCount: rows.filter((row) => row.isLate).length,
-      earlyLeaveCount: rows.filter((row) => row.leftEarly).length,
+      presentCount: Number(result.rows[0]?.present_count || '0'),
+      lateCount: Number(result.rows[0]?.late_count || '0'),
+      earlyLeaveCount: Number(result.rows[0]?.early_leave_count || '0'),
     };
   }
 
@@ -195,6 +358,38 @@ export class AttendanceService {
     if (ctx.role !== 'hr_admin') {
       throw new UnauthorizedException('Only HR Admin can perform this action.');
     }
+  }
+
+  private async fetchAssignments(employeeId?: string) {
+    const result = employeeId
+      ? await this.db.query<{ id: string; employee_id: string; shift_id: string; from_date: string; to_date: string }>(
+          `SELECT id, employee_id, shift_id, from_date, to_date FROM attendance_shift_assignments WHERE employee_id = $1 ORDER BY from_date DESC`,
+          [employeeId],
+        )
+      : await this.db.query<{ id: string; employee_id: string; shift_id: string; from_date: string; to_date: string }>(
+          `SELECT id, employee_id, shift_id, from_date, to_date FROM attendance_shift_assignments ORDER BY from_date DESC`,
+        );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      employeeId: row.employee_id,
+      shiftId: row.shift_id,
+      fromDate: row.from_date,
+      toDate: row.to_date,
+    }));
+  }
+
+  private mapRecord(row: DbAttendanceRecord): AttendanceRecord {
+    return {
+      id: row.id,
+      employeeId: row.employee_id,
+      date: row.date,
+      checkInTime: row.check_in_time ?? undefined,
+      checkOutTime: row.check_out_time ?? undefined,
+      totalHours: row.total_hours === null ? undefined : Number(row.total_hours),
+      isLate: row.is_late,
+      leftEarly: row.left_early,
+    };
   }
 
   private today() {

@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { clearSession, getSession } from './lib.session';
 
 type Overview = {
   greeting: string;
@@ -27,16 +29,20 @@ type Overview = {
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 export default function HomePage() {
+  const router = useRouter();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [message, setMessage] = useState('');
   const [role, setRole] = useState<'employee' | 'manager' | 'hr_admin'>('hr_admin');
 
   async function loadOverview(nextRole = role) {
     try {
+      const session = getSession();
+      if (!session) return;
       const response = await fetch(`${apiBase}/dashboard/overview`, {
         headers: {
+          Authorization: `Bearer ${session.accessToken}`,
           'x-role': nextRole,
-          'x-employee-id': nextRole === 'manager' ? 'mgr_demo_1' : 'emp_demo_1',
+          'x-employee-id': session.user.employeeId || session.user.id,
         },
       });
       const payload = await response.json();
@@ -49,7 +55,10 @@ export default function HomePage() {
   }
 
   useEffect(() => {
-    loadOverview();
+    const session = getSession();
+    if (!session) return;
+    setRole(session.user.role);
+    loadOverview(session.user.role);
   }, []);
 
   const kpis = useMemo(
@@ -77,7 +86,19 @@ export default function HomePage() {
           <a className="nav-item" href="/recruitment">Recruitment</a>
           <a className="nav-item" href="/analytics">Analytics</a>
           <a className="nav-item" href="/documents">Documents</a>
+          {role === 'hr_admin' && <a className="nav-item" href="/admin-users">User Access</a>}
           <a className="nav-item" href="#">Settings</a>
+          <a
+            className="nav-item"
+            href="/login"
+            onClick={(event) => {
+              event.preventDefault();
+              clearSession();
+              router.replace('/login');
+            }}
+          >
+            Logout
+          </a>
         </nav>
       </aside>
 
@@ -85,19 +106,7 @@ export default function HomePage() {
         <header className="topbar card">
           <input aria-label="Search" placeholder="Search employees, documents, or reports..." />
           <div className="topbar-meta">
-            <select
-              aria-label="Role context"
-              value={role}
-              onChange={(event) => {
-                const nextRole = event.target.value as 'employee' | 'manager' | 'hr_admin';
-                setRole(nextRole);
-                loadOverview(nextRole);
-              }}
-            >
-              <option value="hr_admin">HR Admin</option>
-              <option value="manager">Manager</option>
-              <option value="employee">Employee</option>
-            </select>
+            <span>Role: {role}</span>
           </div>
         </header>
 

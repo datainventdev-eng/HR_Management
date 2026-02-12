@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getSession } from '../lib.session';
 
 type Department = { id: string; name: string; code?: string };
 type Employee = {
@@ -53,10 +54,12 @@ export default function CoreHrPage() {
   const managerOptions = useMemo(() => employees.map((employee) => ({ id: employee.id, label: employee.fullName })), [employees]);
 
   async function callApi(path: string, init?: RequestInit) {
+    const session = getSession();
     const response = await fetch(`${apiBase}${path}`, {
       ...init,
       headers: {
         'Content-Type': 'application/json',
+        ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
         'x-role': 'hr_admin',
         ...(init?.headers || {}),
       },
@@ -174,6 +177,10 @@ export default function CoreHrPage() {
       setMessage(error instanceof Error ? error.message : 'Failed to load direct reports.');
     }
   }
+
+  useEffect(() => {
+    refresh();
+  }, []);
 
   return (
     <main className="core-hr-page">

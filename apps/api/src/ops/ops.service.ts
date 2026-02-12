@@ -75,7 +75,7 @@ export class OpsService implements OnModuleInit {
     const result = userId
       ? await this.db.query<any>(`SELECT * FROM app_notifications WHERE user_id = $1 ORDER BY created_at DESC`, [userId])
       : await this.db.query<any>(`SELECT * FROM app_notifications ORDER BY created_at DESC`);
-    return result.rows.map((row) => this.mapNotification(row));
+    return result.rows.map((row: any) => this.mapNotification(row));
   }
 
   async markNotificationRead(id: string) {
@@ -102,12 +102,12 @@ export class OpsService implements OnModuleInit {
     const result = entity
       ? await this.db.query<any>(`SELECT * FROM app_audits WHERE entity = $1 ORDER BY created_at DESC`, [entity])
       : await this.db.query<any>(`SELECT * FROM app_audits ORDER BY created_at DESC`);
-    return result.rows.map((row) => this.mapAudit(row));
+    return result.rows.map((row: any) => this.mapAudit(row));
   }
 
   async latestActivity(limit = 10) {
     const result = await this.db.query<any>(`SELECT * FROM app_audits ORDER BY created_at DESC LIMIT $1`, [limit]);
-    return result.rows.map((row) => this.mapAudit(row));
+    return result.rows.map((row: any) => this.mapAudit(row));
   }
 
   private mapNotification(row: any): NotificationItem {

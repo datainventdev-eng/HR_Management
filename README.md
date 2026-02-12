@@ -49,6 +49,23 @@ npm run dev:web
 npm run dev:api
 ```
 
+### Local API auth note
+
+For local development with real auth flow, set:
+
+```bash
+AUTH_BYPASS=false
+```
+
+in `apps/api/.env`.
+
+Bootstrap HR Admin credentials come from:
+
+- `BOOTSTRAP_ADMIN_EMAIL`
+- `BOOTSTRAP_ADMIN_PASSWORD`
+
+in `apps/api/.env`.
+
 ### 4. Run checks
 
 ```bash

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getSession } from '../lib.session';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
@@ -18,9 +19,11 @@ export default function AnalyticsPage() {
   const [csv, setCsv] = useState('');
 
   async function callApi(path: string, role: 'hr_admin' | 'manager' = 'hr_admin') {
+    const session = getSession();
     const response = await fetch(`${apiBase}${path}`, {
       headers: {
         'Content-Type': 'application/json',
+        ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
         'x-role': role,
       },
     });
@@ -63,6 +66,10 @@ export default function AnalyticsPage() {
       setMessage(error instanceof Error ? error.message : 'Failed to export CSV.');
     }
   }
+
+  useEffect(() => {
+    refreshAll();
+  }, []);
 
   return (
     <main className="analytics-page">

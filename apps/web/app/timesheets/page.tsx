@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { getSession } from '../lib.session';
 
 type Sheet = {
   id: string;
@@ -33,10 +34,12 @@ export default function TimesheetsPage() {
   const totalDraftHours = useMemo(() => entries.reduce((sum, entry) => sum + entry.hours, 0), [entries]);
 
   async function callApi(path: string, init?: RequestInit, role: 'employee' | 'manager' | 'hr_admin' = 'employee', id?: string) {
+    const session = getSession();
     const response = await fetch(`${apiBase}${path}`, {
       ...init,
       headers: {
         'Content-Type': 'application/json',
+        ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
         'x-role': role,
         'x-employee-id': id || employeeId,
         ...(init?.headers || {}),
@@ -130,6 +133,10 @@ export default function TimesheetsPage() {
   function updateHours(index: number, value: number) {
     setEntries((prev) => prev.map((entry, i) => (i === index ? { ...entry, hours: Number.isNaN(value) ? 0 : value } : entry)));
   }
+
+  useEffect(() => {
+    refreshSheets();
+  }, []);
 
   return (
     <main className="timesheet-page">

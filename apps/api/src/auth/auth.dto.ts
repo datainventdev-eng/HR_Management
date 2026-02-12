@@ -21,6 +21,22 @@ export class RegisterDto {
   employeeId?: string;
 }
 
+export class CreateUserDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @MinLength(2)
+  fullName!: string;
+
+  @IsIn(['employee', 'manager', 'hr_admin'])
+  role!: 'employee' | 'manager' | 'hr_admin';
+
+  @IsOptional()
+  @IsString()
+  employeeId?: string;
+}
+
 export class LoginDto {
   @IsEmail()
   email!: string;
@@ -33,4 +49,15 @@ export class LoginDto {
 export class RefreshDto {
   @IsString()
   refreshToken!: string;
+}
+
+export class ChangePasswordDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  currentPassword?: string;
+
+  @IsString()
+  @MinLength(8)
+  newPassword!: string;
 }

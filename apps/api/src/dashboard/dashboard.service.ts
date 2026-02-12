@@ -18,11 +18,13 @@ export class DashboardService {
   ) {}
 
   async overview(ctx: { role: 'employee' | 'manager' | 'hr_admin'; employeeId?: string }) {
-    const headcount = this.coreHrService.headcountStats();
-    const attendance = this.attendanceService.todaySummary();
-    const onLeave = this.leaveService.onLeaveCount();
-    const openPositions = this.recruitmentService.openPositionsCount();
-    const pendingTimesheets = this.timesheetService.pendingApprovalsCount(ctx.role === 'manager' ? ctx.employeeId : undefined);
+    const headcount = await this.coreHrService.headcountStats();
+    const attendance = await this.attendanceService.todaySummary();
+    const onLeave = await this.leaveService.onLeaveCount();
+    const openPositions = await this.recruitmentService.openPositionsCount();
+    const pendingTimesheets = await this.timesheetService.pendingApprovalsCount(
+      ctx.role === 'manager' ? ctx.employeeId : undefined,
+    );
 
     return {
       greeting: ctx.role === 'employee' ? 'Welcome back' : 'Good Morning',

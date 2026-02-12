@@ -1,27 +1,89 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { EmployeeManagerMap, Timesheet, TimesheetEntry, TimesheetRole } from './timesheet.types';
+import { BadRequestException, Injectable, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common';
+import { EmployeeManagerMap, Timesheet, TimesheetEntry, TimesheetRole, TimesheetStatus } from './timesheet.types';
 import { OpsService } from '../ops/ops.service';
+import { DatabaseService } from '../database/database.service';
 
 interface TimesheetContext {
   role: TimesheetRole;
   employeeId?: string;
 }
 
+interface DbTimesheet {
+  id: string;
+  employee_id: string;
+  manager_id: string;
+  week_start_date: string;
+  total_hours: number;
+  status: TimesheetStatus;
+  manager_comment: string | null;
+}
+
 @Injectable()
-export class TimesheetService {
-  private readonly timesheets: Timesheet[] = [];
-  private readonly managerMap: EmployeeManagerMap[] = [];
+export class TimesheetService implements OnModuleInit {
+  constructor(
+    private readonly opsService: OpsService,
+    private readonly db: DatabaseService,
+  ) {}
 
-  constructor(private readonly opsService: OpsService) {}
+  async onModuleInit() {
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS timesheet_manager_map (
+        employee_id TEXT PRIMARY KEY,
+        manager_id TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
 
-  setManagerMap(ctx: TimesheetContext, payload: EmployeeManagerMap) {
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS timesheets (
+        id TEXT PRIMARY KEY,
+        employee_id TEXT NOT NULL,
+        manager_id TEXT NOT NULL,
+        week_start_date DATE NOT NULL,
+        total_hours NUMERIC(6,2) NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('Draft','Submitted','Approved','Rejected')),
+        manager_comment TEXT,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_timesheet_week UNIQUE (employee_id, week_start_date)
+      );
+    `);
+
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS timesheet_entries (
+        id TEXT PRIMARY KEY,
+        timesheet_id TEXT NOT NULL,
+        day TEXT NOT NULL,
+        hours NUMERIC(5,2) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT fk_timesheet_entries_timesheet FOREIGN KEY (timesheet_id) REFERENCES timesheets(id) ON DELETE CASCADE
+      );
+    `);
+
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS timesheet_history (
+        id TEXT PRIMARY KEY,
+        timesheet_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('Draft','Submitted','Approved','Rejected')),
+        at TIMESTAMPTZ NOT NULL,
+        comment TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT fk_timesheet_history_timesheet FOREIGN KEY (timesheet_id) REFERENCES timesheets(id) ON DELETE CASCADE
+      );
+    `);
+  }
+
+  async setManagerMap(ctx: TimesheetContext, payload: EmployeeManagerMap) {
     this.assertHrOrManager(ctx);
-    const idx = this.managerMap.findIndex((entry) => entry.employeeId === payload.employeeId);
-    if (idx >= 0) {
-      this.managerMap[idx] = payload;
-    } else {
-      this.managerMap.push(payload);
-    }
+    await this.db.query(
+      `
+      INSERT INTO timesheet_manager_map (employee_id, manager_id, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (employee_id)
+      DO UPDATE SET manager_id = EXCLUDED.manager_id, updated_at = NOW()
+      `,
+      [payload.employeeId, payload.managerId],
+    );
+
     return payload;
   }
 
@@ -49,14 +111,20 @@ export class TimesheetService {
       throw new BadRequestException('Timesheet hours must be between 0 and 24.');
     }
 
-    const mapping = this.managerMap.find((entry) => entry.employeeId === ctx.employeeId);
+    const mappingResult = await this.db.query<{ manager_id: string }>(
+      `SELECT manager_id FROM timesheet_manager_map WHERE employee_id = $1 LIMIT 1`,
+      [ctx.employeeId],
+    );
+    const mapping = mappingResult.rows[0];
     if (!mapping) {
       throw new BadRequestException('Manager assignment is required before submitting timesheet.');
     }
 
-    const existing = this.timesheets.find(
-      (sheet) => sheet.employeeId === ctx.employeeId && sheet.weekStartDate === payload.weekStartDate,
+    const existingResult = await this.db.query<DbTimesheet>(
+      `SELECT * FROM timesheets WHERE employee_id = $1 AND week_start_date = $2 LIMIT 1`,
+      [ctx.employeeId, payload.weekStartDate],
     );
+    const existing = existingResult.rows[0];
 
     if (existing && existing.status === 'Approved') {
       throw new BadRequestException('Approved timesheet cannot be edited.');
@@ -65,12 +133,40 @@ export class TimesheetService {
     const totalHours = payload.entries.reduce((sum, entry) => sum + entry.hours, 0);
 
     if (existing) {
-      existing.entries = payload.entries;
-      existing.totalHours = totalHours;
-      existing.status = 'Submitted';
-      existing.history.push({ status: 'Submitted', at: new Date().toISOString() });
+      await this.db.transaction(async (query) => {
+        await query(
+          `
+          UPDATE timesheets
+          SET total_hours = $2,
+              status = 'Submitted',
+              manager_id = $3,
+              manager_comment = NULL,
+              updated_at = NOW()
+          WHERE id = $1
+          `,
+          [existing.id, totalHours, mapping.manager_id],
+        );
+
+        await query(`DELETE FROM timesheet_entries WHERE timesheet_id = $1`, [existing.id]);
+        for (const entry of payload.entries) {
+          await query(`INSERT INTO timesheet_entries (id, timesheet_id, day, hours) VALUES ($1, $2, $3, $4)`, [
+            this.id('tse'),
+            existing.id,
+            entry.day,
+            entry.hours,
+          ]);
+        }
+
+        await query(`INSERT INTO timesheet_history (id, timesheet_id, status, at, comment) VALUES ($1, $2, $3, NOW(), $4)`, [
+          this.id('tsh'),
+          existing.id,
+          'Submitted',
+          null,
+        ]);
+      });
+
       await this.opsService.addNotification({
-        userId: mapping.managerId,
+        userId: mapping.manager_id,
         type: 'timesheet',
         title: 'Timesheet resubmitted',
         message: `Employee ${ctx.employeeId} resubmitted weekly timesheet ${existing.id}.`,
@@ -80,59 +176,86 @@ export class TimesheetService {
         action: 'timesheet.submitted',
         entity: 'timesheet',
         entityId: existing.id,
-        metadata: { weekStartDate: existing.weekStartDate, totalHours },
+        metadata: { weekStartDate: payload.weekStartDate, totalHours },
       });
-      return existing;
+
+      return this.getTimesheetById(existing.id);
     }
 
-    const sheet: Timesheet = {
-      id: this.id('ts'),
-      employeeId: ctx.employeeId,
-      managerId: mapping.managerId,
-      weekStartDate: payload.weekStartDate,
-      entries: payload.entries,
-      totalHours,
-      status: 'Submitted',
-      history: [{ status: 'Submitted', at: new Date().toISOString() }],
-    };
+    const timesheetId = this.id('ts');
 
-    this.timesheets.push(sheet);
+    await this.db.transaction(async (query) => {
+      await query(
+        `
+        INSERT INTO timesheets (id, employee_id, manager_id, week_start_date, total_hours, status, manager_comment, updated_at)
+        VALUES ($1, $2, $3, $4, $5, 'Submitted', NULL, NOW())
+        `,
+        [timesheetId, ctx.employeeId, mapping.manager_id, payload.weekStartDate, totalHours],
+      );
+
+      for (const entry of payload.entries) {
+        await query(`INSERT INTO timesheet_entries (id, timesheet_id, day, hours) VALUES ($1, $2, $3, $4)`, [
+          this.id('tse'),
+          timesheetId,
+          entry.day,
+          entry.hours,
+        ]);
+      }
+
+      await query(`INSERT INTO timesheet_history (id, timesheet_id, status, at, comment) VALUES ($1, $2, $3, NOW(), $4)`, [
+        this.id('tsh'),
+        timesheetId,
+        'Submitted',
+        null,
+      ]);
+    });
+
     await this.opsService.addNotification({
-      userId: mapping.managerId,
+      userId: mapping.manager_id,
       type: 'timesheet',
       title: 'New timesheet submitted',
-      message: `Employee ${ctx.employeeId} submitted timesheet ${sheet.id}.`,
+      message: `Employee ${ctx.employeeId} submitted timesheet ${timesheetId}.`,
     });
     await this.opsService.addAudit({
       actorId: ctx.employeeId,
       action: 'timesheet.submitted',
       entity: 'timesheet',
-      entityId: sheet.id,
-      metadata: { weekStartDate: sheet.weekStartDate, totalHours },
+      entityId: timesheetId,
+      metadata: { weekStartDate: payload.weekStartDate, totalHours },
     });
-    return sheet;
+
+    return this.getTimesheetById(timesheetId);
   }
 
-  listTimesheets(ctx: TimesheetContext, query?: { employeeId?: string; weekStartDate?: string }) {
-    let list = this.timesheets;
+  async listTimesheets(ctx: TimesheetContext, query?: { employeeId?: string; weekStartDate?: string }) {
+    const params: unknown[] = [];
+    const where: string[] = [];
 
     if (ctx.role === 'employee') {
-      list = list.filter((sheet) => sheet.employeeId === ctx.employeeId);
+      where.push(`employee_id = $${params.push(ctx.employeeId ?? '')}`);
     }
 
     if (ctx.role === 'manager') {
-      list = list.filter((sheet) => sheet.managerId === ctx.employeeId);
+      where.push(`manager_id = $${params.push(ctx.employeeId ?? '')}`);
     }
 
     if (ctx.role === 'hr_admin' && query?.employeeId) {
-      list = list.filter((sheet) => sheet.employeeId === query.employeeId);
+      where.push(`employee_id = $${params.push(query.employeeId)}`);
     }
 
     if (query?.weekStartDate) {
-      list = list.filter((sheet) => sheet.weekStartDate === query.weekStartDate);
+      where.push(`week_start_date = $${params.push(query.weekStartDate)}`);
     }
 
-    return list;
+    const sql = `
+      SELECT *
+      FROM timesheets
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+      ORDER BY week_start_date DESC
+    `;
+
+    const result = await this.db.query<DbTimesheet>(sql, params);
+    return Promise.all(result.rows.map((row) => this.getTimesheetById(row.id)));
   }
 
   async decideTimesheet(
@@ -147,12 +270,13 @@ export class TimesheetService {
       throw new UnauthorizedException('Only managers can approve or reject timesheets.');
     }
 
-    const timesheet = this.timesheets.find((sheet) => sheet.id === payload.timesheetId);
+    const result = await this.db.query<DbTimesheet>(`SELECT * FROM timesheets WHERE id = $1 LIMIT 1`, [payload.timesheetId]);
+    const timesheet = result.rows[0];
     if (!timesheet) {
       throw new NotFoundException('Timesheet not found.');
     }
 
-    if (timesheet.managerId !== ctx.employeeId) {
+    if (timesheet.manager_id !== ctx.employeeId) {
       throw new UnauthorizedException('Managers can only decide direct-report timesheets.');
     }
 
@@ -160,11 +284,28 @@ export class TimesheetService {
       throw new BadRequestException('Only submitted timesheets can be updated.');
     }
 
-    timesheet.status = payload.decision;
-    timesheet.managerComment = payload.managerComment;
-    timesheet.history.push({ status: payload.decision, at: new Date().toISOString(), comment: payload.managerComment });
+    await this.db.transaction(async (query) => {
+      await query(
+        `
+        UPDATE timesheets
+        SET status = $2,
+            manager_comment = $3,
+            updated_at = NOW()
+        WHERE id = $1
+        `,
+        [timesheet.id, payload.decision, payload.managerComment ?? null],
+      );
+
+      await query(`INSERT INTO timesheet_history (id, timesheet_id, status, at, comment) VALUES ($1, $2, $3, NOW(), $4)`, [
+        this.id('tsh'),
+        timesheet.id,
+        payload.decision,
+        payload.managerComment ?? null,
+      ]);
+    });
+
     await this.opsService.addNotification({
-      userId: timesheet.employeeId,
+      userId: timesheet.employee_id,
       type: 'timesheet',
       title: `Timesheet ${payload.decision.toLowerCase()}`,
       message: `Your timesheet ${timesheet.id} was ${payload.decision.toLowerCase()}.`,
@@ -177,31 +318,77 @@ export class TimesheetService {
       metadata: { managerComment: payload.managerComment || '' },
     });
 
-    return timesheet;
+    return this.getTimesheetById(timesheet.id);
   }
 
-  seedDemoData() {
-    if (this.managerMap.length === 0) {
-      this.managerMap.push({ employeeId: 'emp_demo_1', managerId: 'mgr_demo_1' });
-    }
+  async seedDemoData() {
+    await this.db.query(
+      `
+      INSERT INTO timesheet_manager_map (employee_id, manager_id, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (employee_id)
+      DO UPDATE SET manager_id = EXCLUDED.manager_id, updated_at = NOW()
+      `,
+      ['emp_demo_1', 'mgr_demo_1'],
+    );
+
+    const count = await this.db.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM timesheet_manager_map`);
 
     return {
       message: 'Timesheet demo baseline is ready.',
-      mappingCount: this.managerMap.length,
+      mappingCount: Number(count.rows[0]?.count || '0'),
     };
   }
 
-  pendingApprovalsCount(managerId?: string) {
-    const list = managerId
-      ? this.timesheets.filter((sheet) => sheet.managerId === managerId)
-      : this.timesheets;
-    return list.filter((sheet) => sheet.status === 'Submitted').length;
+  async pendingApprovalsCount(managerId?: string) {
+    const result = managerId
+      ? await this.db.query<{ count: string }>(
+          `SELECT COUNT(*)::text AS count FROM timesheets WHERE manager_id = $1 AND status = 'Submitted'`,
+          [managerId],
+        )
+      : await this.db.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM timesheets WHERE status = 'Submitted'`);
+
+    return Number(result.rows[0]?.count || '0');
   }
 
   private assertHrOrManager(ctx: TimesheetContext) {
     if (ctx.role !== 'hr_admin' && ctx.role !== 'manager') {
       throw new UnauthorizedException('Only HR Admin or Manager can perform this action.');
     }
+  }
+
+  private async getTimesheetById(id: string): Promise<Timesheet> {
+    const timesheetResult = await this.db.query<DbTimesheet>(`SELECT * FROM timesheets WHERE id = $1 LIMIT 1`, [id]);
+    const sheet = timesheetResult.rows[0];
+    if (!sheet) {
+      throw new NotFoundException('Timesheet not found.');
+    }
+
+    const entriesResult = await this.db.query<{ day: string; hours: number }>(
+      `SELECT day, hours FROM timesheet_entries WHERE timesheet_id = $1 ORDER BY day ASC`,
+      [id],
+    );
+
+    const historyResult = await this.db.query<{ status: TimesheetStatus; at: string; comment: string | null }>(
+      `SELECT status, at::text AS at, comment FROM timesheet_history WHERE timesheet_id = $1 ORDER BY at ASC`,
+      [id],
+    );
+
+    return {
+      id: sheet.id,
+      employeeId: sheet.employee_id,
+      managerId: sheet.manager_id,
+      weekStartDate: sheet.week_start_date,
+      entries: entriesResult.rows.map((entry) => ({ day: entry.day, hours: Number(entry.hours) })),
+      totalHours: Number(sheet.total_hours),
+      status: sheet.status,
+      managerComment: sheet.manager_comment ?? undefined,
+      history: historyResult.rows.map((item) => ({
+        status: item.status,
+        at: item.at,
+        comment: item.comment ?? undefined,
+      })),
+    };
   }
 
   private id(prefix: string) {

@@ -19,6 +19,23 @@ export class JwtAuthGuard implements CanActivate {
 
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const authHeader = req.headers.authorization;
+
+    if (!authHeader?.startsWith('Bearer ') && process.env.AUTH_BYPASS === 'true') {
+      const roleHeader = req.headers['x-role'];
+      const employeeHeader = req.headers['x-employee-id'];
+      const role = typeof roleHeader === 'string' ? roleHeader : 'employee';
+      const employeeId = typeof employeeHeader === 'string' ? employeeHeader : undefined;
+
+      req.user = {
+        id: employeeId ?? 'dev-user',
+        email: 'dev@local',
+        role: role as 'employee' | 'manager' | 'hr_admin',
+        employeeId,
+      };
+
+      return true;
+    }
+
     if (!authHeader?.startsWith('Bearer ')) {
       throw new UnauthorizedException('Authorization token is required.');
     }

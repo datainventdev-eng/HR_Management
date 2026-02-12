@@ -32,10 +32,13 @@ export class ReportsController {
   }
 
   @Get('export')
-  export(@Headers() headers: Record<string, string>, @Query('report') report: 'attendance' | 'leave' | 'payroll' | 'hiring') {
+  async export(
+    @Headers() headers: Record<string, string>,
+    @Query('report') report: 'attendance' | 'leave' | 'payroll' | 'hiring',
+  ) {
     return {
       report,
-      csv: this.reportsService.exportCsv(this.ctx(headers), report),
+      csv: await this.reportsService.exportCsv(this.ctx(headers), report),
     };
   }
 

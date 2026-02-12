@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { getSession } from '../lib.session';
 
 type ComponentRow = { id: string; employeeId: string; type: 'earning' | 'deduction'; name: string; amount: number };
 type EntryRow = { employeeId: string; month: string; gross: number; deductions: number; net: number; status: 'Draft' | 'Finalized' };
@@ -26,10 +27,12 @@ export default function PayrollPage() {
   const [payslips, setPayslips] = useState<PayslipRow[]>([]);
 
   async function callApi(path: string, init?: RequestInit, role: 'hr_admin' | 'employee' = 'hr_admin', id?: string) {
+    const session = getSession();
     const response = await fetch(`${apiBase}${path}`, {
       ...init,
       headers: {
         'Content-Type': 'application/json',
+        ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {}),
         'x-role': role,
         'x-employee-id': id || employeeId,
         ...(init?.headers || {}),
@@ -105,6 +108,10 @@ export default function PayrollPage() {
       setMessage(error instanceof Error ? error.message : 'Failed to finalize payroll.');
     }
   }
+
+  useEffect(() => {
+    refreshAll();
+  }, []);
 
   return (
     <main className="payroll-page">

@@ -3,4 +3,5 @@ export interface CurrentUser {
   email: string;
   role: 'employee' | 'manager' | 'hr_admin';
   employeeId?: string;
+  mustChangePassword?: boolean;
 }

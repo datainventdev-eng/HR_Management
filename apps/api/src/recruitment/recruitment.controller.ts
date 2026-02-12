@@ -84,6 +84,11 @@ export class RecruitmentController {
     return this.recruitmentService.updateOfferStatus(this.ctx(headers), body);
   }
 
+  @Get('offers')
+  listOffers(@Query('candidateId') candidateId?: string) {
+    return this.recruitmentService.listOffers(candidateId);
+  }
+
   @Post('convert')
   convert(@Headers() headers: Record<string, string>, @Body() body: { candidateId: string }) {
     return this.recruitmentService.convertCandidateToEmployee(this.ctx(headers), body);

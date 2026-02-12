@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS app_users (
   full_name TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('employee','manager','hr_admin')),
   employee_id TEXT,
+  must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
   password_hash TEXT NOT NULL,
   refresh_token_hash TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
