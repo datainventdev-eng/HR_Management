@@ -287,6 +287,12 @@ small {
   gap: 12px;
 }
 
+.recruitment-page {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
 .hours-row {
   display: flex;
   align-items: center;
