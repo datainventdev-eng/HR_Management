@@ -90,7 +90,7 @@ export class PayrollService {
     return results;
   }
 
-  finalizeMonth(ctx: PayrollContext, payload: { month: string; employeeIds: string[] }) {
+  async finalizeMonth(ctx: PayrollContext, payload: { month: string; employeeIds: string[] }) {
     this.assertHrAdmin(ctx);
 
     const finalized: PayrollEntry[] = [];
@@ -127,13 +127,13 @@ export class PayrollService {
         });
       }
 
-      this.opsService.addNotification({
+      await this.opsService.addNotification({
         userId: employeeId,
         type: 'payroll',
         title: `Payslip available for ${payload.month}`,
         message: `Your payroll for ${payload.month} has been finalized.`,
       });
-      this.opsService.addAudit({
+      await this.opsService.addAudit({
         actorId: ctx.employeeId || 'hr_admin',
         action: 'payroll.finalized',
         entity: 'payroll_entry',

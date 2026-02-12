@@ -77,7 +77,7 @@ export class LeaveService {
     return allocation;
   }
 
-  requestLeave(
+  async requestLeave(
     ctx: LeaveContext,
     payload: {
       leaveTypeId: string;
@@ -138,13 +138,13 @@ export class LeaveService {
 
     this.requests.push(request);
 
-    this.opsService.addNotification({
+    await this.opsService.addNotification({
       userId: mapping.managerId,
       type: 'leave',
       title: 'New leave request',
       message: `Employee ${ctx.employeeId} submitted leave request ${request.id}.`,
     });
-    this.opsService.addAudit({
+    await this.opsService.addAudit({
       actorId: ctx.employeeId,
       action: 'leave.request.submitted',
       entity: 'leave_request',
@@ -177,7 +177,7 @@ export class LeaveService {
     return this.requests;
   }
 
-  decideRequest(
+  async decideRequest(
     ctx: LeaveContext,
     payload: {
       requestId: string;
@@ -215,13 +215,13 @@ export class LeaveService {
       }
     }
 
-    this.opsService.addNotification({
+    await this.opsService.addNotification({
       userId: request.employeeId,
       type: 'leave',
       title: `Leave ${payload.decision.toLowerCase()}`,
       message: `Your leave request ${request.id} was ${payload.decision.toLowerCase()}.`,
     });
-    this.opsService.addAudit({
+    await this.opsService.addAudit({
       actorId: ctx.employeeId || 'manager',
       action: `leave.request.${payload.decision.toLowerCase()}`,
       entity: 'leave_request',

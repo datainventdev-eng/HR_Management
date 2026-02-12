@@ -25,7 +25,7 @@ export class TimesheetService {
     return payload;
   }
 
-  submitTimesheet(
+  async submitTimesheet(
     ctx: TimesheetContext,
     payload: {
       weekStartDate: string;
@@ -69,13 +69,13 @@ export class TimesheetService {
       existing.totalHours = totalHours;
       existing.status = 'Submitted';
       existing.history.push({ status: 'Submitted', at: new Date().toISOString() });
-      this.opsService.addNotification({
+      await this.opsService.addNotification({
         userId: mapping.managerId,
         type: 'timesheet',
         title: 'Timesheet resubmitted',
         message: `Employee ${ctx.employeeId} resubmitted weekly timesheet ${existing.id}.`,
       });
-      this.opsService.addAudit({
+      await this.opsService.addAudit({
         actorId: ctx.employeeId,
         action: 'timesheet.submitted',
         entity: 'timesheet',
@@ -97,13 +97,13 @@ export class TimesheetService {
     };
 
     this.timesheets.push(sheet);
-    this.opsService.addNotification({
+    await this.opsService.addNotification({
       userId: mapping.managerId,
       type: 'timesheet',
       title: 'New timesheet submitted',
       message: `Employee ${ctx.employeeId} submitted timesheet ${sheet.id}.`,
     });
-    this.opsService.addAudit({
+    await this.opsService.addAudit({
       actorId: ctx.employeeId,
       action: 'timesheet.submitted',
       entity: 'timesheet',
@@ -135,7 +135,7 @@ export class TimesheetService {
     return list;
   }
 
-  decideTimesheet(
+  async decideTimesheet(
     ctx: TimesheetContext,
     payload: {
       timesheetId: string;
@@ -163,13 +163,13 @@ export class TimesheetService {
     timesheet.status = payload.decision;
     timesheet.managerComment = payload.managerComment;
     timesheet.history.push({ status: payload.decision, at: new Date().toISOString(), comment: payload.managerComment });
-    this.opsService.addNotification({
+    await this.opsService.addNotification({
       userId: timesheet.employeeId,
       type: 'timesheet',
       title: `Timesheet ${payload.decision.toLowerCase()}`,
       message: `Your timesheet ${timesheet.id} was ${payload.decision.toLowerCase()}.`,
     });
-    this.opsService.addAudit({
+    await this.opsService.addAudit({
       actorId: ctx.employeeId || 'manager',
       action: `timesheet.${payload.decision.toLowerCase()}`,
       entity: 'timesheet',

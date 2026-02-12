@@ -5,7 +5,7 @@
 - Project: HR Management Website (V1)
 - Date initialized: 2026-02-11
 - Target go-live: 2026-02-15
-- Current phase: GW-4 completed (fast mode execution)
+- Current phase: Phase 1 foundation hardening in progress (auth/RBAC + Supabase persistence baseline)
 - Reviewer: `F`
 
 ## 2. Group Progress

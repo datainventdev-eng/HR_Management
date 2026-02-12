@@ -17,7 +17,7 @@ export class DashboardService {
     private readonly opsService: OpsService,
   ) {}
 
-  overview(ctx: { role: 'employee' | 'manager' | 'hr_admin'; employeeId?: string }) {
+  async overview(ctx: { role: 'employee' | 'manager' | 'hr_admin'; employeeId?: string }) {
     const headcount = this.coreHrService.headcountStats();
     const attendance = this.attendanceService.todaySummary();
     const onLeave = this.leaveService.onLeaveCount();
@@ -40,7 +40,7 @@ export class DashboardService {
         { id: 'ev2', title: 'Interview Block', time: '02:30 PM' },
       ],
       quickActions: ['Add Employee', 'Process Payroll', 'Schedule Interview', 'Generate Report'],
-      recentActivity: this.opsService.latestActivity(6),
+      recentActivity: await this.opsService.latestActivity(6),
       currentProjects: [
         { name: 'Q1 Performance Reviews', progress: 85, due: '2026-03-15' },
         { name: 'New Hire Onboarding', progress: 60, due: '2026-02-28' },

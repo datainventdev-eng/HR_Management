@@ -15,7 +15,7 @@ export class CoreHrService {
 
   constructor(private readonly opsService: OpsService) {}
 
-  createDepartment(ctx: RequestContext, payload: { name: string; code?: string }) {
+  async createDepartment(ctx: RequestContext, payload: { name: string; code?: string }) {
     this.assertHrAdmin(ctx);
     const name = payload.name?.trim();
     if (!name) {
@@ -29,7 +29,7 @@ export class CoreHrService {
     };
 
     this.departments.push(department);
-    this.opsService.addAudit({
+    await this.opsService.addAudit({
       actorId: ctx.employeeId || 'hr_admin',
       action: 'department.created',
       entity: 'department',
@@ -43,7 +43,7 @@ export class CoreHrService {
     return this.departments;
   }
 
-  createEmployee(ctx: RequestContext, payload: Omit<EmployeeProfile, 'id'>) {
+  async createEmployee(ctx: RequestContext, payload: Omit<EmployeeProfile, 'id'>) {
     this.assertHrAdmin(ctx);
     this.validateEmployeePayload(payload);
 
@@ -62,7 +62,7 @@ export class CoreHrService {
     };
 
     this.employees.push(employee);
-    this.opsService.addAudit({
+    await this.opsService.addAudit({
       actorId: ctx.employeeId || 'hr_admin',
       action: 'employee.created',
       entity: 'employee',
@@ -72,7 +72,7 @@ export class CoreHrService {
     return employee;
   }
 
-  updateEmployee(ctx: RequestContext, id: string, payload: Partial<Omit<EmployeeProfile, 'id' | 'employeeId'>>) {
+  async updateEmployee(ctx: RequestContext, id: string, payload: Partial<Omit<EmployeeProfile, 'id' | 'employeeId'>>) {
     this.assertHrAdmin(ctx);
     const employee = this.employees.find((entry) => entry.id === id);
     if (!employee) {
@@ -87,7 +87,7 @@ export class CoreHrService {
     }
 
     Object.assign(employee, payload);
-    this.opsService.addAudit({
+    await this.opsService.addAudit({
       actorId: ctx.employeeId || 'hr_admin',
       action: 'employee.updated',
       entity: 'employee',
@@ -128,7 +128,7 @@ export class CoreHrService {
     return this.employees.filter((employee) => employee.managerId === managerId);
   }
 
-  createLifecycleEvent(
+  async createLifecycleEvent(
     ctx: RequestContext,
     payload: {
       employeeId: string;
@@ -162,7 +162,7 @@ export class CoreHrService {
       Object.assign(employee, payload.changes);
     }
 
-    this.opsService.addAudit({
+    await this.opsService.addAudit({
       actorId: ctx.employeeId || 'hr_admin',
       action: 'employee.lifecycle.updated',
       entity: 'lifecycle_event',
