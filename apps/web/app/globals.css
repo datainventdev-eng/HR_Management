@@ -281,6 +281,12 @@ small {
   gap: 12px;
 }
 
+.payroll-page {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
 .hours-row {
   display: flex;
   align-items: center;
