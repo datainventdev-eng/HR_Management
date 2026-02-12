@@ -14,7 +14,7 @@
 |---|---|---:|---|---|---|
 | GW-1 | In Progress | 4/4 | Pending | Pending | No |
 | GW-2 | In Progress | 4/4 | Pending | Pending | No |
-| GW-3 | In Progress | 1/4 | Pending | Pending | No |
+| GW-3 | In Progress | 2/4 | Pending | Pending | No |
 | GW-4 | Not Started | 0/4 | Pending | Pending | No |
 
 ## 3. Task-Level Tracker
@@ -29,8 +29,8 @@
 | TW-2.2 | Attendance and shifts module | Codex + User | codex/gw-2-tw-2.2 | #2 (Merged) | Completed | Passed | Approved/Merged | Attendance and shift slice merged to main |
 | TW-2.3 | Leave module | Codex + User | codex/gw-2-tw-2.3 | #3 (Merged) | Completed | Passed | Approved/Merged | Leave module merged to main |
 | TW-2.4 | Timesheet module | Codex + User | codex/gw-2-tw-2.4 | #4 (Merged) | Completed | Passed | Approved/Merged | Timesheet module merged to main |
-| TW-3.1 | Payroll module | Codex + User | codex/gw-3-tw-3.1 | Local only | In Review | Pending | Pending | Payroll API + UI slice implemented locally; awaiting group-end push |
-| TW-3.2 | Recruitment module | Codex + User | - | - | Not Started | Pending | Pending | |
+| TW-3.1 | Payroll module | Codex + User | codex/gw-3-tw-3.1 | #5 (Merged) | Completed | Passed | Approved/Merged | Payroll module merged to main |
+| TW-3.2 | Recruitment module | Codex + User | codex/gw-3-tw-3.2 | Local only | In Review | Pending | Pending | Recruitment ATS basics API + UI implemented locally; awaiting group-end push |
 | TW-3.3 | Documents and policy module | Codex + User | - | - | Not Started | Pending | Pending | |
 | TW-3.4 | Reports module | Codex + User | - | - | Not Started | Pending | Pending | |
 | TW-4.1 | Dashboard live integration | Codex + User | - | - | Not Started | Pending | Pending | |

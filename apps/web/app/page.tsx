@@ -45,7 +45,7 @@ export default function HomePage() {
           <a className="nav-item" href="/payroll">
             Payroll
           </a>
-          <a className="nav-item" href="#">
+          <a className="nav-item" href="/recruitment">
             Recruitment
           </a>
           <a className="nav-item" href="#">
