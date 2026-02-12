@@ -68,9 +68,9 @@ High-level milestones:
 - Monorepo setup
 - Frontend: Next.js
 - Backend: NestJS
-- Database: PostgreSQL
+- Database: Supabase (Postgres)
 - Auth: JWT
-- Hosting: to be decided later
+- Hosting: Vercel (final project/environment setup later)
 - CI baseline: lint + test + build on PR
 
 ## 9. Assumptions
@@ -83,7 +83,7 @@ High-level milestones:
 
 ## 10. Dependencies
 
-- Final environment/hosting decision
+- Final Vercel project/environment setup details
 - Access to production infra credentials when deployment is ready
 - Stable acceptance from reviewer (`F`) per group
 

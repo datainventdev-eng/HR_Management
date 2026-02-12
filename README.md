@@ -17,7 +17,7 @@ A simple, responsive HR management web app built for single-company use.
 
 - Frontend: Next.js
 - Backend: NestJS
-- Database: PostgreSQL
+- Database: Supabase (Postgres)
 - Auth: JWT
 - Repo model: Monorepo
 

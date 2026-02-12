@@ -46,7 +46,7 @@ Core runtime flow:
 1. User authenticates via JWT auth flow.
 2. Frontend consumes NestJS APIs for dashboard + module data.
 3. Backend enforces RBAC and validates inputs.
-4. PostgreSQL stores operational data + audit trail.
+4. Supabase Postgres stores operational data + audit trail.
 
 ## 5. Module Breakdown
 
@@ -71,7 +71,7 @@ Core runtime flow:
 - Notifications module
 - Audit module
 
-### Data Layer (PostgreSQL)
+### Data Layer (Supabase Postgres)
 - Relational schema with foreign keys
 - Soft status handling where required (active/inactive, approval statuses)
 - Indexed lookup fields for common dashboards/filters

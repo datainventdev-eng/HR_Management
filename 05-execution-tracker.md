@@ -28,7 +28,7 @@
 | TW-2.1 | Core HR module | Codex + User | codex/gw-2-tw-2.1 | #1 (Merged) | Completed | Passed | Approved/Merged | Core HR API + UI slice merged to main |
 | TW-2.2 | Attendance and shifts module | Codex + User | codex/gw-2-tw-2.2 | #2 (Merged) | Completed | Passed | Approved/Merged | Attendance and shift slice merged to main |
 | TW-2.3 | Leave module | Codex + User | codex/gw-2-tw-2.3 | #3 (Merged) | Completed | Passed | Approved/Merged | Leave module merged to main |
-| TW-2.4 | Timesheet module | Codex + User | codex/gw-2-tw-2.4 | Local only | In Review | Pending | Pending | Timesheet API + UI slice implemented locally; group-end push mode |
+| TW-2.4 | Timesheet module | Codex + User | codex/gw-2-tw-2.4 | #4 (Merged) | Completed | Passed | Approved/Merged | Timesheet module merged to main |
 | TW-3.1 | Payroll module | Codex + User | - | - | Not Started | Pending | Pending | |
 | TW-3.2 | Recruitment module | Codex + User | - | - | Not Started | Pending | Pending | |
 | TW-3.3 | Documents and policy module | Codex + User | - | - | Not Started | Pending | Pending | |

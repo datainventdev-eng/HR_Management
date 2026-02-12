@@ -33,10 +33,10 @@ All threads must follow this file to keep outputs consistent and merge-safe.
 
 - Frontend: Next.js
 - Backend: NestJS
-- Database: PostgreSQL
+- Database: Supabase (Postgres)
 - Auth: JWT (access + refresh)
 - Architecture: monorepo
-- Deployment hosting: pending
+- Deployment hosting: Vercel (environment setup in later group)
 - V1 must be responsive across mobile/tablet/desktop
 
 ## 5. Branch and PR Standards
