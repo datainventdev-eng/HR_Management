@@ -181,6 +181,16 @@ export class AttendanceService {
     };
   }
 
+  todaySummary(date = this.today()) {
+    const rows = this.attendance.filter((record) => record.date === date);
+    return {
+      date,
+      presentCount: rows.filter((row) => Boolean(row.checkInTime)).length,
+      lateCount: rows.filter((row) => row.isLate).length,
+      earlyLeaveCount: rows.filter((row) => row.leftEarly).length,
+    };
+  }
+
   private assertHrAdmin(ctx: AttendanceContext) {
     if (ctx.role !== 'hr_admin') {
       throw new UnauthorizedException('Only HR Admin can perform this action.');

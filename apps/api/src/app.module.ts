@@ -8,6 +8,8 @@ import { PayrollModule } from './payroll/payroll.module';
 import { RecruitmentModule } from './recruitment/recruitment.module';
 import { DocumentsModule } from './documents/documents.module';
 import { ReportsModule } from './reports/reports.module';
+import { OpsModule } from './ops/ops.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   controllers: [HealthController],
@@ -20,6 +22,8 @@ import { ReportsModule } from './reports/reports.module';
     RecruitmentModule,
     DocumentsModule,
     ReportsModule,
+    OpsModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}

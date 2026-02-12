@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PayrollEntry, PayrollRole, Payslip, SalaryComponent } from './payroll.types';
+import { OpsService } from '../ops/ops.service';
 
 interface PayrollContext {
   role: PayrollRole;
@@ -11,6 +12,8 @@ export class PayrollService {
   private readonly components: SalaryComponent[] = [];
   private readonly payrollEntries: PayrollEntry[] = [];
   private readonly payslips: Payslip[] = [];
+
+  constructor(private readonly opsService: OpsService) {}
 
   addComponent(
     ctx: PayrollContext,
@@ -123,6 +126,20 @@ export class PayrollService {
           net: entry.net,
         });
       }
+
+      this.opsService.addNotification({
+        userId: employeeId,
+        type: 'payroll',
+        title: `Payslip available for ${payload.month}`,
+        message: `Your payroll for ${payload.month} has been finalized.`,
+      });
+      this.opsService.addAudit({
+        actorId: ctx.employeeId || 'hr_admin',
+        action: 'payroll.finalized',
+        entity: 'payroll_entry',
+        entityId: `${employeeId}:${payload.month}`,
+        metadata: { net: entry.net },
+      });
     }
 
     return finalized;

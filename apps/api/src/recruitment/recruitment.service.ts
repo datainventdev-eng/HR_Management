@@ -214,6 +214,10 @@ export class RecruitmentService {
     return { message: 'Recruitment demo baseline is ready.', jobs: this.jobs.length, candidates: this.candidates.length };
   }
 
+  openPositionsCount() {
+    return this.jobs.filter((job) => job.status === 'open').length;
+  }
+
   private ensureCandidate(candidateId: string) {
     const candidate = this.candidates.find((item) => item.id === candidateId);
     if (!candidate) {

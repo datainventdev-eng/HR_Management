@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { EmployeeManagerMap, LeaveAllocation, LeaveRequest, LeaveRole, LeaveType } from './leave.types';
+import { OpsService } from '../ops/ops.service';
 
 interface LeaveContext {
   role: LeaveRole;
@@ -12,6 +13,8 @@ export class LeaveService {
   private readonly allocations: LeaveAllocation[] = [];
   private readonly requests: LeaveRequest[] = [];
   private readonly employeeManagerMap: EmployeeManagerMap[] = [];
+
+  constructor(private readonly opsService: OpsService) {}
 
   createLeaveType(ctx: LeaveContext, payload: { name: string; paid: boolean; annualLimit?: number }) {
     this.assertHrAdmin(ctx);
@@ -134,6 +137,20 @@ export class LeaveService {
     };
 
     this.requests.push(request);
+
+    this.opsService.addNotification({
+      userId: mapping.managerId,
+      type: 'leave',
+      title: 'New leave request',
+      message: `Employee ${ctx.employeeId} submitted leave request ${request.id}.`,
+    });
+    this.opsService.addAudit({
+      actorId: ctx.employeeId,
+      action: 'leave.request.submitted',
+      entity: 'leave_request',
+      entityId: request.id,
+      metadata: { leaveTypeId: request.leaveTypeId, days: request.days },
+    });
     return request;
   }
 
@@ -198,6 +215,20 @@ export class LeaveService {
       }
     }
 
+    this.opsService.addNotification({
+      userId: request.employeeId,
+      type: 'leave',
+      title: `Leave ${payload.decision.toLowerCase()}`,
+      message: `Your leave request ${request.id} was ${payload.decision.toLowerCase()}.`,
+    });
+    this.opsService.addAudit({
+      actorId: ctx.employeeId || 'manager',
+      action: `leave.request.${payload.decision.toLowerCase()}`,
+      entity: 'leave_request',
+      entityId: request.id,
+      metadata: { managerComment: payload.managerComment || '' },
+    });
+
     return request;
   }
 
@@ -231,6 +262,12 @@ export class LeaveService {
       message: 'Leave demo baseline is ready.',
       leaveTypes: this.leaveTypes.length,
     };
+  }
+
+  onLeaveCount(date = new Date().toISOString().slice(0, 10)) {
+    return this.requests.filter(
+      (request) => request.status === 'Approved' && request.startDate <= date && request.endDate >= date,
+    ).length;
   }
 
   private assertHrAdmin(ctx: LeaveContext) {
