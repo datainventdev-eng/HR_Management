@@ -6,9 +6,10 @@ import { LeaveModule } from './leave/leave.module';
 import { TimesheetModule } from './timesheet/timesheet.module';
 import { PayrollModule } from './payroll/payroll.module';
 import { RecruitmentModule } from './recruitment/recruitment.module';
+import { DocumentsModule } from './documents/documents.module';
 
 @Module({
   controllers: [HealthController],
-  imports: [CoreHrModule, AttendanceModule, LeaveModule, TimesheetModule, PayrollModule, RecruitmentModule],
+  imports: [CoreHrModule, AttendanceModule, LeaveModule, TimesheetModule, PayrollModule, RecruitmentModule, DocumentsModule],
 })
 export class AppModule {}
