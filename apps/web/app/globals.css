@@ -269,6 +269,12 @@ small {
   gap: 12px;
 }
 
+.leave-page {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
 .core-hr-actions {
   display: flex;
   gap: 8px;

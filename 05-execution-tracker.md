@@ -13,7 +13,7 @@
 | Group | Status | Task Completion | Test Agent Pass | Quality Agent Pass | Ready to Proceed |
 |---|---|---:|---|---|---|
 | GW-1 | In Progress | 4/4 | Pending | Pending | No |
-| GW-2 | In Progress | 2/4 | Pending | Pending | No |
+| GW-2 | In Progress | 3/4 | Pending | Pending | No |
 | GW-3 | Not Started | 0/4 | Pending | Pending | No |
 | GW-4 | Not Started | 0/4 | Pending | Pending | No |
 
@@ -27,7 +27,7 @@
 | TW-1.4 | CI checks setup | Codex + User | - | - | Completed (Scaffolded) | Pending | Pending | GitHub Actions workflow added for lint/test/build |
 | TW-2.1 | Core HR module | Codex + User | codex/gw-2-tw-2.1 | #1 (Merged) | Completed | Passed | Approved/Merged | Core HR API + UI slice merged to main |
 | TW-2.2 | Attendance and shifts module | Codex + User | codex/gw-2-tw-2.2 | #2 (Merged) | Completed | Passed | Approved/Merged | Attendance and shift slice merged to main |
-| TW-2.3 | Leave module | Codex + User | - | - | Not Started | Pending | Pending | |
+| TW-2.3 | Leave module | Codex + User | codex/gw-2-tw-2.3 | Pending | In Review | Pending | Pending | Leave API + UI slice implemented; preparing PR |
 | TW-2.4 | Timesheet module | Codex + User | - | - | Not Started | Pending | Pending | |
 | TW-3.1 | Payroll module | Codex + User | - | - | Not Started | Pending | Pending | |
 | TW-3.2 | Recruitment module | Codex + User | - | - | Not Started | Pending | Pending | |
