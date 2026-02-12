@@ -51,7 +51,7 @@ export default function HomePage() {
           <a className="nav-item" href="#">
             Analytics
           </a>
-          <a className="nav-item" href="#">
+          <a className="nav-item" href="/documents">
             Documents
           </a>
           <a className="nav-item" href="#">
