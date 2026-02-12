@@ -5,16 +5,16 @@
 - Project: HR Management Website (V1)
 - Date initialized: 2026-02-11
 - Target go-live: 2026-02-15
-- Current phase: GW-1 scaffolding in progress
+- Current phase: GW-4 execution (fast mode: one branch/PR per group)
 - Reviewer: `F`
 
 ## 2. Group Progress
 
 | Group | Status | Task Completion | Test Agent Pass | Quality Agent Pass | Ready to Proceed |
 |---|---|---:|---|---|---|
-| GW-1 | In Progress | 4/4 | Pending | Pending | No |
-| GW-2 | In Progress | 4/4 | Pending | Pending | No |
-| GW-3 | In Progress | 4/4 | Pending | Pending | No |
+| GW-1 | Completed | 4/4 | Pending | Pending | Yes |
+| GW-2 | Completed | 4/4 | Pending | Pending | Yes |
+| GW-3 | Completed | 4/4 | Pending | Pending | Yes |
 | GW-4 | Not Started | 0/4 | Pending | Pending | No |
 
 ## 3. Task-Level Tracker
@@ -32,11 +32,14 @@
 | TW-3.1 | Payroll module | Codex + User | codex/gw-3-tw-3.1 | #5 (Merged) | Completed | Passed | Approved/Merged | Payroll module merged to main |
 | TW-3.2 | Recruitment module | Codex + User | codex/gw-3-tw-3.2 | #6 (Merged) | Completed | Passed | Approved/Merged | Recruitment module merged to main |
 | TW-3.3 | Documents and policy module | Codex + User | codex/gw-3-tw-3.3 | #7 (Merged) | Completed | Passed | Approved/Merged | Documents and policy module merged to main |
-| TW-3.4 | Reports module | Codex + User | codex/gw-3-tw-3.4 | Local only | In Review | Pending | Pending | Reports API + analytics UI implemented locally; awaiting rebase push |
+| TW-3.4 | Reports module | Codex + User | codex/gw-3-tw-3.4 | #8 (Merged) | Completed | Passed | Approved/Merged | Reports module merged to main |
 | TW-4.1 | Dashboard live integration | Codex + User | - | - | Not Started | Pending | Pending | |
 | TW-4.2 | Notifications and audit completion | Codex + User | - | - | Not Started | Pending | Pending | |
 | TW-4.3 | Responsive and accessibility pass | Codex + User | - | - | Not Started | Pending | Pending | |
 | TW-4.4 | Release readiness pack | Codex + User | - | - | Not Started | Pending | Pending | |
+
+Fast mode note:
+- GW-4 will use a single branch (`codex/gw-4-fast`) and one group-level PR.
 
 ## 4. Blocker Log
 

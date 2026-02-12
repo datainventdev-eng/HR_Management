@@ -110,3 +110,11 @@ For each group:
 5. Run Test Agent pass PR.
 6. Run Quality Agent pass PR.
 7. Mark group complete only when final gate conditions are met.
+
+## 12. Fast Mode Override
+
+The team has enabled fast mode for delivery speed:
+- Use one branch per group (for example `codex/gw-4-fast`)
+- Use one PR per group instead of one PR per task
+- Keep local commits scoped by task where practical
+- Rebase once at group end before opening/merging the group PR
