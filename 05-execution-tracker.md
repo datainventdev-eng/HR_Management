@@ -13,7 +13,7 @@
 | Group | Status | Task Completion | Test Agent Pass | Quality Agent Pass | Ready to Proceed |
 |---|---|---:|---|---|---|
 | GW-1 | In Progress | 4/4 | Pending | Pending | No |
-| GW-2 | In Progress | 3/4 | Pending | Pending | No |
+| GW-2 | In Progress | 4/4 | Pending | Pending | No |
 | GW-3 | Not Started | 0/4 | Pending | Pending | No |
 | GW-4 | Not Started | 0/4 | Pending | Pending | No |
 
@@ -28,7 +28,7 @@
 | TW-2.1 | Core HR module | Codex + User | codex/gw-2-tw-2.1 | #1 (Merged) | Completed | Passed | Approved/Merged | Core HR API + UI slice merged to main |
 | TW-2.2 | Attendance and shifts module | Codex + User | codex/gw-2-tw-2.2 | #2 (Merged) | Completed | Passed | Approved/Merged | Attendance and shift slice merged to main |
 | TW-2.3 | Leave module | Codex + User | codex/gw-2-tw-2.3 | #3 (Merged) | Completed | Passed | Approved/Merged | Leave module merged to main |
-| TW-2.4 | Timesheet module | Codex + User | - | - | Not Started | Pending | Pending | |
+| TW-2.4 | Timesheet module | Codex + User | codex/gw-2-tw-2.4 | Local only | In Review | Pending | Pending | Timesheet API + UI slice implemented locally; group-end push mode |
 | TW-3.1 | Payroll module | Codex + User | - | - | Not Started | Pending | Pending | |
 | TW-3.2 | Recruitment module | Codex + User | - | - | Not Started | Pending | Pending | |
 | TW-3.3 | Documents and policy module | Codex + User | - | - | Not Started | Pending | Pending | |
@@ -49,7 +49,7 @@
 | Date | Risk | Probability | Impact | Mitigation | Status |
 |---|---|---|---|---|---|
 | 2026-02-11 | Tight timeline for full module scope by week end | Medium | High | Prioritize P0 delivery and defer P1/P2 if needed | Open |
-| 2026-02-11 | Hosting/deployment decision pending | Medium | Medium | Keep deployment scripts generic until host finalized | Open |
+| 2026-02-11 | Vercel environment setup details pending (project/env vars/domains) | Medium | Medium | Prepare deployment checklist and env var mapping before GW-4 release pass | Open |
 
 ## 6. Daily Update Template
 

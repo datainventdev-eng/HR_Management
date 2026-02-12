@@ -275,6 +275,19 @@ small {
   gap: 12px;
 }
 
+.timesheet-page {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.hours-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .core-hr-actions {
   display: flex;
   gap: 8px;
