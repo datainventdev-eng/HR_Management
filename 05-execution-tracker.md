@@ -5,7 +5,7 @@
 - Project: HR Management Website (V1)
 - Date initialized: 2026-02-11
 - Target go-live: 2026-02-15
-- Current phase: GW-4 execution (fast mode: one branch/PR per group)
+- Current phase: GW-4 completed (fast mode execution)
 - Reviewer: `F`
 
 ## 2. Group Progress
@@ -15,7 +15,7 @@
 | GW-1 | Completed | 4/4 | Pending | Pending | Yes |
 | GW-2 | Completed | 4/4 | Pending | Pending | Yes |
 | GW-3 | Completed | 4/4 | Pending | Pending | Yes |
-| GW-4 | In Progress | 4/4 | Pending | Pending | No |
+| GW-4 | Completed | 4/4 | Pending | Pending | Yes |
 
 ## 3. Task-Level Tracker
 
@@ -33,10 +33,10 @@
 | TW-3.2 | Recruitment module | Codex + User | codex/gw-3-tw-3.2 | #6 (Merged) | Completed | Passed | Approved/Merged | Recruitment module merged to main |
 | TW-3.3 | Documents and policy module | Codex + User | codex/gw-3-tw-3.3 | #7 (Merged) | Completed | Passed | Approved/Merged | Documents and policy module merged to main |
 | TW-3.4 | Reports module | Codex + User | codex/gw-3-tw-3.4 | #8 (Merged) | Completed | Passed | Approved/Merged | Reports module merged to main |
-| TW-4.1 | Dashboard live integration | Codex + User | codex/gw-4-fast | GW-4 PR pending | Completed | Pending | Pending | `/dashboard/overview` wired and dashboard page moved to live API data |
-| TW-4.2 | Notifications and audit completion | Codex + User | codex/gw-4-fast | GW-4 PR pending | Completed | Pending | Pending | Workflow notifications/audits added via `ops` module and event hooks |
-| TW-4.3 | Responsive and accessibility pass | Codex + User | codex/gw-4-fast | GW-4 PR pending | Completed | Pending | Pending | focus-visible, control semantics, and responsive adjustments applied |
-| TW-4.4 | Release readiness pack | Codex + User | codex/gw-4-fast | GW-4 PR pending | Completed | Pending | Pending | release docs and deployment handoff files created under `docs/` |
+| TW-4.1 | Dashboard live integration | Codex + User | codex/gw-4-fast | #9 (Merged) | Completed | Passed | Approved/Merged | `/dashboard/overview` wired and dashboard page moved to live API data |
+| TW-4.2 | Notifications and audit completion | Codex + User | codex/gw-4-fast | #9 (Merged) | Completed | Passed | Approved/Merged | Workflow notifications/audits added via `ops` module and event hooks |
+| TW-4.3 | Responsive and accessibility pass | Codex + User | codex/gw-4-fast | #9 (Merged) | Completed | Passed | Approved/Merged | focus-visible, control semantics, and responsive adjustments applied |
+| TW-4.4 | Release readiness pack | Codex + User | codex/gw-4-fast | #9 (Merged) | Completed | Passed | Approved/Merged | release docs and deployment handoff files created under `docs/` |
 
 Fast mode note:
 - GW-4 will use a single branch (`codex/gw-4-fast`) and one group-level PR.
