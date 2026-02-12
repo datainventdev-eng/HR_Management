@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { EmployeeManagerMap, Timesheet, TimesheetEntry, TimesheetRole } from './timesheet.types';
+import { OpsService } from '../ops/ops.service';
 
 interface TimesheetContext {
   role: TimesheetRole;
@@ -10,6 +11,8 @@ interface TimesheetContext {
 export class TimesheetService {
   private readonly timesheets: Timesheet[] = [];
   private readonly managerMap: EmployeeManagerMap[] = [];
+
+  constructor(private readonly opsService: OpsService) {}
 
   setManagerMap(ctx: TimesheetContext, payload: EmployeeManagerMap) {
     this.assertHrOrManager(ctx);
@@ -66,6 +69,19 @@ export class TimesheetService {
       existing.totalHours = totalHours;
       existing.status = 'Submitted';
       existing.history.push({ status: 'Submitted', at: new Date().toISOString() });
+      this.opsService.addNotification({
+        userId: mapping.managerId,
+        type: 'timesheet',
+        title: 'Timesheet resubmitted',
+        message: `Employee ${ctx.employeeId} resubmitted weekly timesheet ${existing.id}.`,
+      });
+      this.opsService.addAudit({
+        actorId: ctx.employeeId,
+        action: 'timesheet.submitted',
+        entity: 'timesheet',
+        entityId: existing.id,
+        metadata: { weekStartDate: existing.weekStartDate, totalHours },
+      });
       return existing;
     }
 
@@ -81,6 +97,19 @@ export class TimesheetService {
     };
 
     this.timesheets.push(sheet);
+    this.opsService.addNotification({
+      userId: mapping.managerId,
+      type: 'timesheet',
+      title: 'New timesheet submitted',
+      message: `Employee ${ctx.employeeId} submitted timesheet ${sheet.id}.`,
+    });
+    this.opsService.addAudit({
+      actorId: ctx.employeeId,
+      action: 'timesheet.submitted',
+      entity: 'timesheet',
+      entityId: sheet.id,
+      metadata: { weekStartDate: sheet.weekStartDate, totalHours },
+    });
     return sheet;
   }
 
@@ -134,6 +163,19 @@ export class TimesheetService {
     timesheet.status = payload.decision;
     timesheet.managerComment = payload.managerComment;
     timesheet.history.push({ status: payload.decision, at: new Date().toISOString(), comment: payload.managerComment });
+    this.opsService.addNotification({
+      userId: timesheet.employeeId,
+      type: 'timesheet',
+      title: `Timesheet ${payload.decision.toLowerCase()}`,
+      message: `Your timesheet ${timesheet.id} was ${payload.decision.toLowerCase()}.`,
+    });
+    this.opsService.addAudit({
+      actorId: ctx.employeeId || 'manager',
+      action: `timesheet.${payload.decision.toLowerCase()}`,
+      entity: 'timesheet',
+      entityId: timesheet.id,
+      metadata: { managerComment: payload.managerComment || '' },
+    });
 
     return timesheet;
   }
@@ -147,6 +189,13 @@ export class TimesheetService {
       message: 'Timesheet demo baseline is ready.',
       mappingCount: this.managerMap.length,
     };
+  }
+
+  pendingApprovalsCount(managerId?: string) {
+    const list = managerId
+      ? this.timesheets.filter((sheet) => sheet.managerId === managerId)
+      : this.timesheets;
+    return list.filter((sheet) => sheet.status === 'Submitted').length;
   }
 
   private assertHrOrManager(ctx: TimesheetContext) {

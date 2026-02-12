@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { Department, EmployeeProfile, LifecycleEvent, UserRole } from './core-hr.types';
+import { OpsService } from '../ops/ops.service';
 
 interface RequestContext {
   role: UserRole;
@@ -11,6 +12,8 @@ export class CoreHrService {
   private readonly employees: EmployeeProfile[] = [];
   private readonly departments: Department[] = [];
   private readonly lifecycleEvents: LifecycleEvent[] = [];
+
+  constructor(private readonly opsService: OpsService) {}
 
   createDepartment(ctx: RequestContext, payload: { name: string; code?: string }) {
     this.assertHrAdmin(ctx);
@@ -26,6 +29,13 @@ export class CoreHrService {
     };
 
     this.departments.push(department);
+    this.opsService.addAudit({
+      actorId: ctx.employeeId || 'hr_admin',
+      action: 'department.created',
+      entity: 'department',
+      entityId: department.id,
+      metadata: { name: department.name },
+    });
     return department;
   }
 
@@ -52,6 +62,13 @@ export class CoreHrService {
     };
 
     this.employees.push(employee);
+    this.opsService.addAudit({
+      actorId: ctx.employeeId || 'hr_admin',
+      action: 'employee.created',
+      entity: 'employee',
+      entityId: employee.id,
+      metadata: { employeeId: employee.employeeId, title: employee.title },
+    });
     return employee;
   }
 
@@ -70,6 +87,13 @@ export class CoreHrService {
     }
 
     Object.assign(employee, payload);
+    this.opsService.addAudit({
+      actorId: ctx.employeeId || 'hr_admin',
+      action: 'employee.updated',
+      entity: 'employee',
+      entityId: employee.id,
+      metadata: payload as Record<string, unknown>,
+    });
     return employee;
   }
 
@@ -138,6 +162,14 @@ export class CoreHrService {
       Object.assign(employee, payload.changes);
     }
 
+    this.opsService.addAudit({
+      actorId: ctx.employeeId || 'hr_admin',
+      action: 'employee.lifecycle.updated',
+      entity: 'lifecycle_event',
+      entityId: event.id,
+      metadata: { employeeId: event.employeeId, type: event.type },
+    });
+
     return event;
   }
 
@@ -194,6 +226,16 @@ export class CoreHrService {
       message: 'Demo data seeded.',
       managerId: manager.id,
       employeeId: directReport.id,
+    };
+  }
+
+  headcountStats() {
+    const total = this.employees.length;
+    const active = this.employees.filter((employee) => employee.status === 'active').length;
+    return {
+      total,
+      active,
+      inactive: total - active,
     };
   }
 

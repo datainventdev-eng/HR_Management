@@ -1,80 +1,114 @@
-const kpis = [
-  { label: 'Total Employees', value: '524', sub: 'vs last month', badge: '+12' },
-  { label: 'Present Today', value: '487', sub: 'attendance rate', badge: '93%' },
-  { label: 'On Leave', value: '37', sub: 'sick leaves', badge: '15' },
-  { label: 'Open Positions', value: '12', sub: 'new this week', badge: '+5' },
-];
+'use client';
 
-const quickActions = ['Add Employee', 'Process Payroll', 'Schedule Interview', 'Generate Report'];
+import { useEffect, useMemo, useState } from 'react';
 
-const activities = [
-  'New employee added',
-  'Leave approved',
-  'Interview scheduled',
-  'Payroll processed',
-];
+type Overview = {
+  greeting: string;
+  role: 'employee' | 'manager' | 'hr_admin';
+  kpis: {
+    totalEmployees: number;
+    presentToday: number;
+    onLeave: number;
+    openPositions: number;
+    pendingTimesheets: number;
+  };
+  attendance: {
+    date: string;
+    presentCount: number;
+    lateCount: number;
+    earlyLeaveCount: number;
+  };
+  schedule: Array<{ id: string; title: string; time: string }>;
+  quickActions: string[];
+  recentActivity: Array<{ id: string; action: string; entity: string; createdAt: string }>;
+  currentProjects: Array<{ name: string; progress: number; due: string }>;
+};
 
-const projects = [
-  { name: 'Q1 Performance Reviews', progress: 85, due: 'Mar 15, 2026' },
-  { name: 'New Hire Onboarding', progress: 60, due: 'Feb 28, 2026' },
-  { name: 'Benefits Enrollment', progress: 40, due: 'Mar 31, 2026' },
-  { name: 'Training Program Rollout', progress: 92, due: 'Feb 20, 2026' },
-];
+const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 export default function HomePage() {
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [message, setMessage] = useState('');
+  const [role, setRole] = useState<'employee' | 'manager' | 'hr_admin'>('hr_admin');
+
+  async function loadOverview(nextRole = role) {
+    try {
+      const response = await fetch(`${apiBase}/dashboard/overview`, {
+        headers: {
+          'x-role': nextRole,
+          'x-employee-id': nextRole === 'manager' ? 'mgr_demo_1' : 'emp_demo_1',
+        },
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message ?? 'Failed to load dashboard.');
+      setOverview(payload);
+      setMessage('Dashboard synced with live API data.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to load dashboard data.');
+    }
+  }
+
+  useEffect(() => {
+    loadOverview();
+  }, []);
+
+  const kpis = useMemo(
+    () => [
+      { label: 'Total Employees', value: overview?.kpis.totalEmployees ?? 0, sub: 'company headcount' },
+      { label: 'Present Today', value: overview?.kpis.presentToday ?? 0, sub: 'attendance count' },
+      { label: 'On Leave', value: overview?.kpis.onLeave ?? 0, sub: 'approved today' },
+      { label: 'Open Positions', value: overview?.kpis.openPositions ?? 0, sub: 'active postings' },
+      { label: 'Pending Timesheets', value: overview?.kpis.pendingTimesheets ?? 0, sub: 'awaiting manager review' },
+    ],
+    [overview],
+  );
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">HR Manager</div>
         <nav>
-          <a className="nav-item active" href="/">
-            Dashboard
-          </a>
-          <a className="nav-item" href="/core-hr">
-            Core HR
-          </a>
-          <a className="nav-item" href="/attendance-time">
-            Attendance & Time
-          </a>
-          <a className="nav-item" href="/timesheets">
-            Timesheets
-          </a>
-          <a className="nav-item" href="/leave-management">
-            Leave Management
-          </a>
-          <a className="nav-item" href="/payroll">
-            Payroll
-          </a>
-          <a className="nav-item" href="/recruitment">
-            Recruitment
-          </a>
-          <a className="nav-item" href="/analytics">
-            Analytics
-          </a>
-          <a className="nav-item" href="/documents">
-            Documents
-          </a>
-          <a className="nav-item" href="#">
-            Settings
-          </a>
+          <a className="nav-item active" href="/">Dashboard</a>
+          <a className="nav-item" href="/core-hr">Core HR</a>
+          <a className="nav-item" href="/attendance-time">Attendance & Time</a>
+          <a className="nav-item" href="/timesheets">Timesheets</a>
+          <a className="nav-item" href="/leave-management">Leave Management</a>
+          <a className="nav-item" href="/payroll">Payroll</a>
+          <a className="nav-item" href="/recruitment">Recruitment</a>
+          <a className="nav-item" href="/analytics">Analytics</a>
+          <a className="nav-item" href="/documents">Documents</a>
+          <a className="nav-item" href="#">Settings</a>
         </nav>
       </aside>
 
       <main className="content">
         <header className="topbar card">
           <input aria-label="Search" placeholder="Search employees, documents, or reports..." />
-          <div className="topbar-meta">Notifications | JD</div>
+          <div className="topbar-meta">
+            <select
+              aria-label="Role context"
+              value={role}
+              onChange={(event) => {
+                const nextRole = event.target.value as 'employee' | 'manager' | 'hr_admin';
+                setRole(nextRole);
+                loadOverview(nextRole);
+              }}
+            >
+              <option value="hr_admin">HR Admin</option>
+              <option value="manager">Manager</option>
+              <option value="employee">Employee</option>
+            </select>
+          </div>
         </header>
 
         <section className="hero">
-          <h1>Good Morning, John</h1>
-          <p>Here is what is happening with your team today.</p>
+          <h1>{overview?.greeting || 'Good Morning'}, John</h1>
+          <p>{message || 'Loading dashboard data...'}</p>
         </section>
 
         <section className="kpi-grid">
           {kpis.map((kpi) => (
             <article key={kpi.label} className="card kpi-card">
-              <div className="badge">{kpi.badge}</div>
               <h2>{kpi.value}</h2>
               <h3>{kpi.label}</h3>
               <p>{kpi.sub}</p>
@@ -84,17 +118,21 @@ export default function HomePage() {
 
         <section className="main-grid">
           <article className="card attendance-card">
-            <h2>Attendance Rate</h2>
-            <p>Total attendance rate of employees in this company</p>
-            <div className="chart-placeholder">Chart placeholder (monthly attendance bars)</div>
+            <h2>Attendance Snapshot</h2>
+            <p>
+              Date {overview?.attendance.date || '-'}: present {overview?.attendance.presentCount || 0}, late{' '}
+              {overview?.attendance.lateCount || 0}, early leave {overview?.attendance.earlyLeaveCount || 0}
+            </p>
+            <div className="chart-placeholder">Live chart integration placeholder</div>
           </article>
 
           <article className="card schedule-card">
             <h2>Schedule</h2>
             <p>Your meetings and team time-offs</p>
             <ul>
-              <li>09:00 AM - Team Standup</li>
-              <li>02:30 PM - Interview with Sarah Chen</li>
+              {(overview?.schedule || []).map((item) => (
+                <li key={item.id}>{item.time} - {item.title}</li>
+              ))}
             </ul>
           </article>
         </section>
@@ -102,17 +140,12 @@ export default function HomePage() {
         <section className="lower-grid">
           <article className="card projects-card">
             <h2>Current Projects</h2>
-            <p>Active HR initiatives and their progress</p>
+            <p>Active HR initiatives and progress</p>
             <ul className="project-list">
-              {projects.map((project) => (
+              {(overview?.currentProjects || []).map((project) => (
                 <li key={project.name}>
-                  <div className="project-row">
-                    <span>{project.name}</span>
-                    <span>{project.progress}%</span>
-                  </div>
-                  <div className="progress-track">
-                    <div className="progress-fill" style={{ width: `${project.progress}%` }} />
-                  </div>
+                  <div className="project-row"><span>{project.name}</span><span>{project.progress}%</span></div>
+                  <div className="progress-track"><div className="progress-fill" style={{ width: `${project.progress}%` }} /></div>
                   <small>Due: {project.due}</small>
                 </li>
               ))}
@@ -123,10 +156,8 @@ export default function HomePage() {
             <article className="card">
               <h2>Quick Actions</h2>
               <div className="quick-actions">
-                {quickActions.map((action) => (
-                  <button key={action} type="button">
-                    {action}
-                  </button>
+                {(overview?.quickActions || []).map((action) => (
+                  <button key={action} type="button" aria-label={action}>{action}</button>
                 ))}
               </div>
             </article>
@@ -134,8 +165,8 @@ export default function HomePage() {
             <article className="card">
               <h2>Recent Activity</h2>
               <ul className="activity-list">
-                {activities.map((entry) => (
-                  <li key={entry}>{entry}</li>
+                {(overview?.recentActivity || []).map((item) => (
+                  <li key={item.id}>{item.action} on {item.entity}</li>
                 ))}
               </ul>
             </article>

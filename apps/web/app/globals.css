@@ -36,6 +36,10 @@ input {
   font: inherit;
 }
 
+select {
+  font: inherit;
+}
+
 .app-shell {
   min-height: 100vh;
   display: grid;
@@ -93,6 +97,13 @@ input {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 12px;
+}
+
+.topbar select {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff;
 }
 
 .topbar-meta {
@@ -204,6 +215,14 @@ small {
   background: #f8fafc;
   padding: 12px;
   text-align: left;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .activity-list {
