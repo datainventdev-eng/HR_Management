@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearSession, getSession } from './lib.session';
 
@@ -33,6 +33,10 @@ export default function HomePage() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [message, setMessage] = useState('');
   const [role, setRole] = useState<'employee' | 'manager' | 'hr_admin'>('hr_admin');
+  const [viewerName, setViewerName] = useState('User');
+  const [viewerRole, setViewerRole] = useState<'employee' | 'manager' | 'hr_admin'>('hr_admin');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   async function loadOverview(nextRole = role) {
     try {
@@ -58,8 +62,27 @@ export default function HomePage() {
     const session = getSession();
     if (!session) return;
     setRole(session.user.role);
+    setViewerName(session.user.fullName || 'User');
+    setViewerRole(session.user.role);
     loadOverview(session.user.role);
   }, []);
+
+  useEffect(() => {
+    function handleOutsideClick(event: MouseEvent) {
+      if (!menuRef.current) return;
+      if (!menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    window.addEventListener('mousedown', handleOutsideClick);
+    return () => window.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  function formatRoleLabel(value: 'employee' | 'manager' | 'hr_admin') {
+    if (value === 'hr_admin') return 'HR Admin';
+    if (value === 'manager') return 'Manager';
+    return 'Employee';
+  }
 
   const kpis = useMemo(
     () => [
@@ -72,10 +95,56 @@ export default function HomePage() {
     [overview],
   );
 
+  const attendanceSnapshot = useMemo(() => {
+    const apiTotal = overview?.kpis.totalEmployees ?? 0;
+    const rawPresent = overview?.attendance.presentCount ?? 0;
+    const rawLate = overview?.attendance.lateCount ?? 0;
+    const rawEarly = overview?.attendance.earlyLeaveCount ?? 0;
+    const total = Math.max(apiTotal, rawPresent);
+    const onTime = Math.max(rawPresent - rawLate - rawEarly, 0);
+    const absent = Math.max(total - rawPresent, 0);
+
+    return {
+      total,
+      date: overview?.attendance.date || '-',
+      rows: [
+        { key: 'on_time', label: 'On Time', value: onTime, tone: 'on-time' },
+        { key: 'late', label: 'Late', value: rawLate, tone: 'late' },
+        { key: 'early', label: 'Early Leave', value: rawEarly, tone: 'early' },
+        { key: 'absent', label: 'Absent', value: absent, tone: 'absent' },
+      ],
+    };
+  }, [overview]);
+
   return (
     <div className="app-shell">
+      <header className="app-global-header">
+        <img src="/logo-white.svg" alt="HR Management System" className="app-global-logo" />
+        <div className="user-menu" ref={menuRef}>
+          <button type="button" className="user-menu-trigger" onClick={() => setMenuOpen((current) => !current)}>
+            <span className="user-menu-text">
+              <strong>{viewerName}</strong>
+              <small>{formatRoleLabel(viewerRole)}</small>
+            </span>
+            <span className="user-menu-chevron" aria-hidden="true">▾</span>
+          </button>
+          {menuOpen && (
+            <div className="user-menu-dropdown">
+              <button
+                type="button"
+                onClick={() => {
+                  clearSession();
+                  router.replace('/login');
+                }}
+              >
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
+      </header>
+
       <aside className="sidebar">
-        <div className="brand">HR Manager</div>
         <nav>
           <a className="nav-item active" href="/">Dashboard</a>
           <a className="nav-item" href="/core-hr">Core HR</a>
@@ -88,30 +157,16 @@ export default function HomePage() {
           <a className="nav-item" href="/documents">Documents</a>
           {role === 'hr_admin' && <a className="nav-item" href="/admin-users">User Access</a>}
           <a className="nav-item" href="#">Settings</a>
-          <a
-            className="nav-item"
-            href="/login"
-            onClick={(event) => {
-              event.preventDefault();
-              clearSession();
-              router.replace('/login');
-            }}
-          >
-            Logout
-          </a>
         </nav>
       </aside>
 
       <main className="content">
         <header className="topbar card">
           <input aria-label="Search" placeholder="Search employees, documents, or reports..." />
-          <div className="topbar-meta">
-            <span>Role: {role}</span>
-          </div>
         </header>
 
         <section className="hero">
-          <h1>{overview?.greeting || 'Good Morning'}, John</h1>
+          <h1>{overview?.greeting || 'Good Morning'}, {viewerName}</h1>
           <p>{message || 'Loading dashboard data...'}</p>
         </section>
 
@@ -129,10 +184,24 @@ export default function HomePage() {
           <article className="card attendance-card">
             <h2>Attendance Snapshot</h2>
             <p>
-              Date {overview?.attendance.date || '-'}: present {overview?.attendance.presentCount || 0}, late{' '}
-              {overview?.attendance.lateCount || 0}, early leave {overview?.attendance.earlyLeaveCount || 0}
+              Date {attendanceSnapshot.date}: team size {attendanceSnapshot.total}
             </p>
-            <div className="chart-placeholder">Live chart integration placeholder</div>
+            <div className="attendance-bars">
+              {attendanceSnapshot.rows.map((row) => (
+                <div key={row.key} className="attendance-bar-row">
+                  <div className="attendance-bar-head">
+                    <span>{row.label}</span>
+                    <span>{row.value}</span>
+                  </div>
+                  <div className="attendance-bar-track">
+                    <div
+                      className={`attendance-bar-fill ${row.tone}`}
+                      style={{ width: `${(row.value / Math.max(attendanceSnapshot.total, 1)) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           </article>
 
           <article className="card schedule-card">

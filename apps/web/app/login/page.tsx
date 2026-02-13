@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { defaultRouteForRole, setSession } from '../lib.session';
+import { FeedbackMessage } from '../components/ui-feedback';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
@@ -58,7 +59,7 @@ export default function LoginPage() {
           />
           <button type="submit" disabled={loading}>{loading ? 'Signing in...' : 'Sign In'}</button>
         </form>
-        <small>{error || ''}</small>
+        <FeedbackMessage message={error || ''} />
       </section>
     </main>
   );

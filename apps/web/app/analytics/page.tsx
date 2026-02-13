@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getSession } from '../lib.session';
+import { FeedbackMessage } from '../components/ui-feedback';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
@@ -88,7 +89,7 @@ export default function AnalyticsPage() {
             <button type="button" onClick={() => exportCsv('hiring')}>Export Hiring CSV</button>
           </div>
         </div>
-        <small>{message}</small>
+        <FeedbackMessage message={message} />
       </header>
 
       <section className="core-hr-grid">

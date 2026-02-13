@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { getSession } from '../lib.session';
+import { FeedbackMessage } from '../components/ui-feedback';
 
 type LeaveType = { id: string; name: string; paid: boolean; annualLimit?: number };
 type Balance = {
@@ -163,7 +164,7 @@ export default function LeaveManagementPage() {
             <button type="button" onClick={refreshAll}>Refresh</button>
           </div>
         </div>
-        <small>{message}</small>
+        <FeedbackMessage message={message} />
       </header>
 
       <section className="core-hr-grid">

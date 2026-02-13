@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { getSession } from '../lib.session';
+import { FeedbackMessage } from '../components/ui-feedback';
 
 type AttendanceRecord = {
   id: string;
@@ -178,7 +179,7 @@ export default function AttendanceTimePage() {
             </button>
           </div>
         </div>
-        <small>{message}</small>
+        <FeedbackMessage message={message} />
       </header>
 
       <section className="core-hr-grid">

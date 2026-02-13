@@ -32,3 +32,17 @@ export interface LifecycleEvent {
   notes?: string;
   changes?: Partial<Pick<EmployeeProfile, 'departmentId' | 'title' | 'managerId' | 'status'>>;
 }
+
+export interface Customer {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface Project {
+  id: string;
+  customerId: string;
+  customerName?: string;
+  name: string;
+  description?: string;
+}

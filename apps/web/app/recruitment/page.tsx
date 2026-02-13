@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { getSession } from '../lib.session';
+import { FeedbackMessage } from '../components/ui-feedback';
 
 type Job = { id: string; title: string; department: string; location: string; status: 'open' | 'closed' };
 type Candidate = { id: string; name: string; jobId: string; stage: string };
@@ -175,7 +176,7 @@ export default function RecruitmentPage() {
           <button type="button" onClick={seedDemo}>Seed Demo</button>
           <button type="button" onClick={refreshAll}>Refresh</button>
         </div>
-        <small>{message}</small>
+        <FeedbackMessage message={message} />
       </header>
 
       <section className="core-hr-grid">

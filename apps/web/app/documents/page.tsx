@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { getSession } from '../lib.session';
+import { FeedbackMessage } from '../components/ui-feedback';
 
 type PolicyDoc = { id: string; title: string; fileName: string; published: boolean };
 type EmployeeDoc = { id: string; employeeId: string; name: string; fileName: string; expiresOn?: string };
@@ -102,7 +103,7 @@ export default function DocumentsPage() {
             <button type="button" onClick={refreshAll}>Refresh</button>
           </div>
         </div>
-        <small>{message}</small>
+        <FeedbackMessage message={message} />
       </header>
 
       <section className="core-hr-grid">

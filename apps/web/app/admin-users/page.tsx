@@ -1,8 +1,9 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSession } from '../lib.session';
+import { FeedbackMessage } from '../components/ui-feedback';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
@@ -17,10 +18,47 @@ type CreatedUser = {
 
 export default function AdminUsersPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ email: '', fullName: '', role: 'employee' as 'employee' | 'manager' | 'hr_admin', employeeId: '' });
+  const [form, setForm] = useState({
+    email: '',
+    fullName: '',
+    role: 'employee' as 'employee' | 'manager' | 'hr_admin',
+    employeeId: '',
+    joinDate: '',
+    departmentId: '',
+    title: '',
+    managerId: '',
+    status: 'active' as 'active' | 'inactive',
+  });
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
+  const [managers, setManagers] = useState<Array<{ id: string; fullName: string }>>([]);
   const [message, setMessage] = useState('');
   const [createdUser, setCreatedUser] = useState<CreatedUser | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState('');
+
+  async function loadSupportData() {
+    const session = getSession();
+    if (!session) return;
+
+    const [deptRes, empRes] = await Promise.all([
+      fetch(`${apiBase}/core-hr/departments`, {
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+          'x-role': 'hr_admin',
+        },
+      }),
+      fetch(`${apiBase}/core-hr/employees`, {
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+          'x-role': 'hr_admin',
+        },
+      }),
+    ]);
+
+    const deptPayload = await deptRes.json();
+    const empPayload = await empRes.json();
+    if (deptRes.ok) setDepartments(deptPayload);
+    if (empRes.ok) setManagers(empPayload);
+  }
 
   async function createUser(event: FormEvent) {
     event.preventDefault();
@@ -42,6 +80,11 @@ export default function AdminUsersPage() {
           fullName: form.fullName,
           role: form.role,
           employeeId: form.employeeId || undefined,
+          joinDate: form.joinDate || undefined,
+          departmentId: form.departmentId || undefined,
+          title: form.title || undefined,
+          managerId: form.managerId || undefined,
+          status: form.status,
         }),
       });
 
@@ -51,11 +94,25 @@ export default function AdminUsersPage() {
       setCreatedUser(payload.user);
       setTemporaryPassword(payload.temporaryPassword);
       setMessage('User created. Share temporary password securely.');
-      setForm({ email: '', fullName: '', role: 'employee', employeeId: '' });
+      setForm({
+        email: '',
+        fullName: '',
+        role: 'employee',
+        employeeId: '',
+        joinDate: '',
+        departmentId: '',
+        title: '',
+        managerId: '',
+        status: 'active',
+      });
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Failed to create user.');
     }
   }
+
+  useEffect(() => {
+    loadSupportData();
+  }, []);
 
   return (
     <main className="core-hr-page">
@@ -75,14 +132,43 @@ export default function AdminUsersPage() {
               <option value="manager">Manager</option>
               <option value="hr_admin">HR Admin</option>
             </select>
-            <input
-              placeholder="Employee profile ID (optional)"
-              value={form.employeeId}
-              onChange={(e) => setForm((p) => ({ ...p, employeeId: e.target.value }))}
-            />
+            {(form.role === 'employee' || form.role === 'manager') && (
+              <>
+                <label>
+                  Join Date
+                  <input
+                    type="date"
+                    aria-label="Join Date"
+                    value={form.joinDate}
+                    onChange={(e) => setForm((p) => ({ ...p, joinDate: e.target.value }))}
+                  />
+                </label>
+                <select value={form.departmentId} onChange={(e) => setForm((p) => ({ ...p, departmentId: e.target.value }))}>
+                  <option value="">Select department</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+                <input placeholder="Role/Title" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
+                <label>
+                  Reporting Manager
+                  <select value={form.managerId} onChange={(e) => setForm((p) => ({ ...p, managerId: e.target.value }))}>
+                    <option value="">No manager</option>
+                    {managers.map((m) => (
+                      <option key={m.id} value={m.id}>{m.fullName}</option>
+                    ))}
+                  </select>
+                </label>
+                <select value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as 'active' | 'inactive' }))}>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </>
+            )}
             <button type="submit">Create Account</button>
           </form>
-          <small>{message}</small>
+          <small>Employee/manager profile is created and linked automatically during account creation.</small>
+          <FeedbackMessage message={message} />
         </article>
 
         <article className="card">

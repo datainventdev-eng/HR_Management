@@ -17,7 +17,9 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "IBM Plex Sans", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 14px;
+  line-height: 1.35;
 }
 
 h1,
@@ -25,6 +27,34 @@ h2,
 h3,
 p {
   margin: 0;
+}
+
+h1 {
+  font-size: 2rem;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+h2 {
+  font-size: 1.3rem;
+  line-height: 1.2;
+  font-weight: 650;
+}
+
+h3 {
+  font-size: 1rem;
+  line-height: 1.25;
+  font-weight: 600;
+}
+
+p,
+small,
+li,
+button,
+input,
+select,
+textarea {
+  font-size: 0.9rem;
 }
 
 ul {
@@ -44,6 +74,62 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+.network-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.network-progress.active {
+  opacity: 1;
+}
+
+.network-progress-bar {
+  width: 35%;
+  height: 100%;
+  background: linear-gradient(90deg, #24a8ff 0%, #0b73ff 100%);
+  border-radius: 4px;
+  box-shadow: 0 0 8px rgba(11, 115, 255, 0.65);
+  animation: network-progress-slide 0.9s ease-in-out infinite;
+}
+
+@keyframes network-progress-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.feedback-message {
+  margin-top: 10px;
+  display: block;
+  border-radius: 8px;
+  padding: 8px 10px;
+  border: 1px solid;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.feedback-message.success {
+  color: #0f6a3a;
+  border-color: #bdebcf;
+  background: #eefdf4;
+}
+
+.feedback-message.error {
+  color: #9f2b2b;
+  border-color: #f4c2c2;
+  background: #fff1f1;
 }
 
 .app-shell {
@@ -68,15 +154,91 @@ textarea {
   padding: 14px 10px;
 }
 
-.brand {
-  font-size: 1rem;
-  font-weight: 700;
-  margin-bottom: 12px;
-  color: #f9fafb;
-  position: fixed;
-  left: 12px;
-  top: 13px;
+.app-global-header {
+  grid-column: 1 / -1;
+  grid-row: 1;
   z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px 0 12px;
+}
+
+.app-global-logo {
+  height: 31px;
+  width: auto;
+  max-width: 240px;
+}
+
+.user-menu {
+  position: relative;
+}
+
+.user-menu-trigger {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.user-menu-trigger:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.user-menu-text {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+}
+
+.user-menu-text strong {
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.user-menu-text small {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1.1;
+}
+
+.user-menu-chevron {
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.user-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 140px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(25, 30, 36, 0.12);
+}
+
+.user-menu-dropdown button {
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  text-align: left;
+  background: #fff;
+  color: #2d3542;
+  cursor: pointer;
+}
+
+.user-menu-dropdown button:hover {
+  background: #fff4e9;
+  color: #9f4904;
 }
 
 .nav-item {
@@ -100,7 +262,7 @@ textarea {
   grid-row: 2;
   padding: 14px;
   display: grid;
-  gap: 14px;
+  gap: 18px;
 }
 
 .card {
@@ -145,6 +307,11 @@ small {
   color: var(--muted);
 }
 
+.hero p {
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
 .kpi-grid {
   display: grid;
   gap: 10px;
@@ -162,37 +329,77 @@ small {
 
 .kpi-card h2 {
   margin-top: 4px;
-  font-size: 1.55rem;
+  font-size: 1.45rem;
   line-height: 1.05;
 }
 
 .kpi-card h3 {
   margin-top: 4px;
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   line-height: 1.2;
 }
 
 .kpi-card p {
   margin-top: 2px;
-  font-size: 0.58rem;
+  font-size: 0.73rem;
   line-height: 1.2;
 }
 
 .main-grid {
   display: grid;
-  gap: 12px;
+  gap: 16px;
   grid-template-columns: 2fr 1fr;
 }
 
-.chart-placeholder {
+.attendance-bars {
   margin-top: 12px;
-  min-height: 220px;
-  border: 1px dashed #ffcfaa;
+  border: 1px solid #ffdfc4;
   border-radius: 8px;
+  background: #fffaf7;
+  padding: 12px;
   display: grid;
-  place-items: center;
-  color: var(--muted);
-  background: #fffaf6;
+  gap: 10px;
+}
+
+.attendance-bar-row {
+  display: grid;
+  gap: 5px;
+}
+
+.attendance-bar-head {
+  display: flex;
+  justify-content: space-between;
+  color: #4b5562;
+  font-size: 0.82rem;
+}
+
+.attendance-bar-track {
+  width: 100%;
+  height: 9px;
+  background: #eef1f5;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.attendance-bar-fill {
+  height: 100%;
+  border-radius: 10px;
+}
+
+.attendance-bar-fill.on-time {
+  background: #ff8a2f;
+}
+
+.attendance-bar-fill.late {
+  background: #f8b03f;
+}
+
+.attendance-bar-fill.early {
+  background: #f67a2f;
+}
+
+.attendance-bar-fill.absent {
+  background: #9ea7b3;
 }
 
 .schedule-card ul {
@@ -203,7 +410,7 @@ small {
 
 .lower-grid {
   display: grid;
-  gap: 12px;
+  gap: 16px;
   grid-template-columns: 2fr 1fr;
 }
 
@@ -235,14 +442,14 @@ small {
 
 .side-stack {
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
 .quick-actions {
-  margin-top: 10px;
+  margin-top: 12px;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
 .quick-actions button {
@@ -263,9 +470,9 @@ a:focus-visible {
 }
 
 .activity-list {
-  margin-top: 10px;
+  margin-top: 12px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .core-hr-page,
@@ -280,7 +487,7 @@ a:focus-visible {
 .login-page {
   padding: 16px;
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
 .login-page {
@@ -316,7 +523,7 @@ a:focus-visible {
 .core-hr-actions,
 .row-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -332,9 +539,9 @@ a:focus-visible {
 }
 
 .form-grid {
-  margin-top: 10px;
+  margin-top: 12px;
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
 .form-grid input,
@@ -346,14 +553,21 @@ a:focus-visible {
   background: #fff;
 }
 
+.form-grid label {
+  display: grid;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: #5d6672;
+}
+
 .compact-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .simple-list {
-  margin-top: 10px;
+  margin-top: 12px;
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
 .simple-list li {
@@ -365,8 +579,165 @@ a:focus-visible {
 
 .core-hr-grid {
   display: grid;
-  gap: 12px;
+  gap: 16px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.employee-attendance-card {
+  max-width: 520px;
+  margin: 0 auto;
+  text-align: center;
+  display: grid;
+  justify-items: center;
+}
+
+.employee-clock {
+  font-size: 2.4rem;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+.employee-day {
+  margin-top: 6px;
+  font-size: 1.05rem;
+  color: #4e5661;
+}
+
+.attendance-ring {
+  margin-top: 18px;
+  width: 232px;
+  height: 232px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 6px solid #2fca5a;
+  background: #2fca5a;
+}
+
+.attendance-ring.day_out {
+  border-color: #f06c81;
+  background: #f06c81;
+}
+
+.attendance-ring.disabled {
+  opacity: 0.65;
+}
+
+.attendance-ring-button {
+  width: 88%;
+  height: 88%;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font-size: 1.9rem;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.attendance-ring-button:disabled {
+  cursor: not-allowed;
+}
+
+.attendance-ring-icon {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.employee-location {
+  margin-top: 14px;
+  color: #596270;
+  font-size: 0.98rem;
+}
+
+.attendance-progress-wrap {
+  width: min(360px, 100%);
+  margin-top: 12px;
+}
+
+.attendance-progress-label {
+  text-align: left;
+  color: #5a6270;
+  font-size: 0.78rem;
+  margin-bottom: 6px;
+}
+
+.attendance-progress {
+  width: 100%;
+  height: 8px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e9edf2;
+}
+
+.attendance-progress-bar {
+  width: 42%;
+  height: 100%;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #ff8a2f 0%, #ff760f 100%);
+  animation: progress-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(260%);
+  }
+}
+
+.attendance-mini-grid {
+  margin-top: 14px;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.attendance-mini-box {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+}
+
+.attendance-mini-label {
+  font-size: 1rem;
+  color: #485160;
+  font-weight: 600;
+}
+
+.attendance-mini-time {
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+}
+
+.attendance-mini-box button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff8f2;
+  color: #ad5208;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.attendance-mini-box button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.employee-status-line {
+  margin-top: 10px;
+  color: #5c6673;
 }
 
 @media (max-width: 1200px) {
@@ -401,10 +772,17 @@ a:focus-visible {
     grid-row: 3;
   }
 
-  .brand {
-    position: fixed;
-    left: 10px;
-    top: 13px;
+  .app-global-header {
+    padding: 0 10px;
+  }
+
+  .app-global-logo {
+    height: 27px;
+    max-width: 170px;
+  }
+
+  .user-menu-text strong {
+    font-size: 0.78rem;
   }
 
   .kpi-grid,
@@ -412,7 +790,8 @@ a:focus-visible {
   .lower-grid,
   .quick-actions,
   .compact-grid,
-  .core-hr-grid {
+  .core-hr-grid,
+  .attendance-mini-grid {
     grid-template-columns: 1fr;
   }
 

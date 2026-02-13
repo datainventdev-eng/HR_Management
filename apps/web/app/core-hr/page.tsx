@@ -1,9 +1,12 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { getSession } from '../lib.session';
+import { FeedbackMessage } from '../components/ui-feedback';
 
 type Department = { id: string; name: string; code?: string };
+type Customer = { id: string; name: string; description?: string };
+type Project = { id: string; customerId: string; customerName?: string; name: string; description?: string };
 type Employee = {
   id: string;
   fullName: string;
@@ -27,31 +30,22 @@ const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 export default function CoreHrPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [lifecycleEvents, setLifecycleEvents] = useState<LifecycleEvent[]>([]);
   const [activeEmployeeId, setActiveEmployeeId] = useState('');
   const [message, setMessage] = useState('');
 
   const [departmentForm, setDepartmentForm] = useState({ name: '', code: '' });
-  const [employeeForm, setEmployeeForm] = useState({
-    fullName: '',
-    employeeId: '',
-    joinDate: '',
-    departmentId: '',
-    title: '',
-    managerId: '',
-    status: 'active' as 'active' | 'inactive',
-    email: '',
-  });
-
+  const [customerForm, setCustomerForm] = useState({ name: '', description: '' });
+  const [projectForm, setProjectForm] = useState({ customerId: '', name: '', description: '' });
   const [lifecycleForm, setLifecycleForm] = useState({
     employeeId: '',
     type: 'promotion' as LifecycleEvent['type'],
     effectiveDate: '',
     notes: '',
   });
-
-  const managerOptions = useMemo(() => employees.map((employee) => ({ id: employee.id, label: employee.fullName })), [employees]);
 
   async function callApi(path: string, init?: RequestInit) {
     const session = getSession();
@@ -75,8 +69,15 @@ export default function CoreHrPage() {
 
   async function refresh() {
     try {
-      const [departmentData, employeeData] = await Promise.all([callApi('/core-hr/departments'), callApi('/core-hr/employees')]);
+      const [departmentData, customerData, projectData, employeeData] = await Promise.all([
+        callApi('/core-hr/departments'),
+        callApi('/core-hr/customers'),
+        callApi('/core-hr/projects'),
+        callApi('/core-hr/employees'),
+      ]);
       setDepartments(departmentData);
+      setCustomers(customerData);
+      setProjects(projectData);
       setEmployees(employeeData);
       setMessage('Core HR data refreshed.');
     } catch (error) {
@@ -103,34 +104,39 @@ export default function CoreHrPage() {
       });
       setDepartmentForm({ name: '', code: '' });
       await refresh();
+      setMessage('Department created.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to create department.');
     }
   }
 
-  async function createEmployee(event: FormEvent) {
+  async function createCustomer(event: FormEvent) {
     event.preventDefault();
     try {
-      await callApi('/core-hr/employees', {
+      await callApi('/core-hr/customers', {
         method: 'POST',
-        body: JSON.stringify({
-          ...employeeForm,
-          managerId: employeeForm.managerId || undefined,
-        }),
+        body: JSON.stringify(customerForm),
       });
-      setEmployeeForm({
-        fullName: '',
-        employeeId: '',
-        joinDate: '',
-        departmentId: '',
-        title: '',
-        managerId: '',
-        status: 'active',
-        email: '',
-      });
+      setCustomerForm({ name: '', description: '' });
       await refresh();
+      setMessage('Customer created.');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Failed to create employee.');
+      setMessage(error instanceof Error ? error.message : 'Failed to create customer.');
+    }
+  }
+
+  async function createProject(event: FormEvent) {
+    event.preventDefault();
+    try {
+      await callApi('/core-hr/projects', {
+        method: 'POST',
+        body: JSON.stringify(projectForm),
+      });
+      setProjectForm({ customerId: '', name: '', description: '' });
+      await refresh();
+      setMessage('Project created.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to create project.');
     }
   }
 
@@ -186,7 +192,8 @@ export default function CoreHrPage() {
     <main className="core-hr-page">
       <header className="card">
         <h1>Core HR</h1>
-        <p>V1 simple workflows for departments, employee profiles, and lifecycle history.</p>
+        <p>V1 workflows for departments, employee management, and lifecycle history.</p>
+        <small>New employee creation is handled from User Access.</small>
         <div className="core-hr-actions">
           <button type="button" onClick={seedDemo}>
             Seed Demo Data
@@ -195,7 +202,7 @@ export default function CoreHrPage() {
             Refresh Data
           </button>
         </div>
-        <small>{message}</small>
+        <FeedbackMessage message={message} />
       </header>
 
       <section className="core-hr-grid">
@@ -225,69 +232,69 @@ export default function CoreHrPage() {
         </article>
 
         <article className="card">
-          <h2>Create Employee Profile</h2>
-          <form onSubmit={createEmployee} className="form-grid">
+          <h2>Create Customer</h2>
+          <form onSubmit={createCustomer} className="form-grid">
             <input
-              placeholder="Full name"
-              value={employeeForm.fullName}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, fullName: event.target.value }))}
+              placeholder="Customer name"
+              value={customerForm.name}
+              onChange={(event) => setCustomerForm((prev) => ({ ...prev, name: event.target.value }))}
               required
             />
             <input
-              placeholder="Employee ID"
-              value={employeeForm.employeeId}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, employeeId: event.target.value }))}
-              required
+              placeholder="Description"
+              value={customerForm.description}
+              onChange={(event) => setCustomerForm((prev) => ({ ...prev, description: event.target.value }))}
             />
-            <input
-              type="date"
-              value={employeeForm.joinDate}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, joinDate: event.target.value }))}
-              required
-            />
-            <select
-              value={employeeForm.departmentId}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, departmentId: event.target.value }))}
-              required
-            >
-              <option value="">Select department</option>
-              {departments.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
-                </option>
-              ))}
-            </select>
-            <input
-              placeholder="Role/Title"
-              value={employeeForm.title}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, title: event.target.value }))}
-              required
-            />
-            <select
-              value={employeeForm.managerId}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, managerId: event.target.value }))}
-            >
-              <option value="">No manager</option>
-              {managerOptions.map((manager) => (
-                <option key={manager.id} value={manager.id}>
-                  {manager.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={employeeForm.status}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, status: event.target.value as 'active' | 'inactive' }))}
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-            <input
-              placeholder="Email (optional)"
-              value={employeeForm.email}
-              onChange={(event) => setEmployeeForm((prev) => ({ ...prev, email: event.target.value }))}
-            />
-            <button type="submit">Save Employee</button>
+            <button type="submit">Save Customer</button>
           </form>
+          <ul className="simple-list">
+            {customers.map((customer) => (
+              <li key={customer.id}>
+                <strong>{customer.name}</strong> {customer.description ? `- ${customer.description}` : ''}
+              </li>
+            ))}
+          </ul>
+        </article>
+
+        <article className="card">
+          <h2>Create Project</h2>
+          <form onSubmit={createProject} className="form-grid">
+            <select
+              value={projectForm.customerId}
+              onChange={(event) => setProjectForm((prev) => ({ ...prev, customerId: event.target.value }))}
+              required
+            >
+              <option value="">Select customer</option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
+            <input
+              placeholder="Project name"
+              value={projectForm.name}
+              onChange={(event) => setProjectForm((prev) => ({ ...prev, name: event.target.value }))}
+              required
+            />
+            <input
+              placeholder="Description"
+              value={projectForm.description}
+              onChange={(event) => setProjectForm((prev) => ({ ...prev, description: event.target.value }))}
+            />
+            <button type="submit" disabled={!projectForm.customerId}>
+              Save Project
+            </button>
+          </form>
+          <ul className="simple-list">
+            {projects.map((project) => (
+              <li key={project.id}>
+                <strong>{project.name}</strong>
+                {project.customerName ? ` (${project.customerName})` : ''}
+                {project.description ? ` - ${project.description}` : ''}
+              </li>
+            ))}
+          </ul>
         </article>
 
         <article className="card">

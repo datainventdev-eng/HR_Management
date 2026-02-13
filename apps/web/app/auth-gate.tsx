@@ -5,6 +5,7 @@ import { PropsWithChildren, useEffect, useState } from 'react';
 import { defaultRouteForRole, getSession } from './lib.session';
 
 const PUBLIC_ROUTES = ['/login'];
+const EMPLOYEE_ALLOWED_ROUTES = ['/employee', '/attendance-time', '/timesheets', '/leave-management', '/payroll', '/change-password'];
 
 export default function AuthGate({ children }: PropsWithChildren) {
   const router = useRouter();
@@ -42,7 +43,7 @@ export default function AuthGate({ children }: PropsWithChildren) {
       return;
     }
 
-    if (session.user.role === 'employee' && pathname !== '/employee' && pathname !== '/change-password') {
+    if (session.user.role === 'employee' && !EMPLOYEE_ALLOWED_ROUTES.includes(pathname)) {
       router.replace('/employee');
       return;
     }

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common';
-import { Department, EmployeeProfile, LifecycleEvent, UserRole } from './core-hr.types';
+import { Customer, Department, EmployeeProfile, LifecycleEvent, Project, UserRole } from './core-hr.types';
 import { OpsService } from '../ops/ops.service';
 import { DatabaseService } from '../database/database.service';
 
@@ -35,6 +35,20 @@ interface DbLifecycle {
   effective_date: string;
   notes: string | null;
   changes: LifecycleEvent['changes'] | null;
+}
+
+interface DbCustomer {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
+interface DbProject {
+  id: string;
+  customer_id: string | null;
+  customer_name?: string | null;
+  name: string;
+  description: string | null;
 }
 
 @Injectable()
@@ -85,6 +99,126 @@ export class CoreHrService implements OnModuleInit {
         CONSTRAINT fk_core_lifecycle_employee FOREIGN KEY (employee_id) REFERENCES core_employees(id)
       );
     `);
+
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS core_customers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS core_projects (
+        id TEXT PRIMARY KEY,
+        customer_id TEXT,
+        name TEXT NOT NULL,
+        description TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT fk_core_project_customer FOREIGN KEY (customer_id) REFERENCES core_customers(id)
+      );
+    `);
+
+    await this.db.query(`
+      ALTER TABLE core_projects
+      ADD COLUMN IF NOT EXISTS customer_id TEXT;
+    `);
+  }
+
+  async createCustomer(ctx: RequestContext, payload: { name: string; description?: string }) {
+    this.assertHrAdmin(ctx);
+    const name = payload.name?.trim();
+    if (!name) {
+      throw new BadRequestException('Customer name is required.');
+    }
+
+    const customer: Customer = {
+      id: this.id('cust'),
+      name,
+      description: payload.description?.trim() || undefined,
+    };
+
+    await this.db.query(`INSERT INTO core_customers (id, name, description) VALUES ($1, $2, $3)`, [
+      customer.id,
+      customer.name,
+      customer.description ?? null,
+    ]);
+
+    await this.opsService.addAudit({
+      actorId: ctx.employeeId || 'hr_admin',
+      action: 'customer.created',
+      entity: 'customer',
+      entityId: customer.id,
+      metadata: { name: customer.name },
+    });
+
+    return customer;
+  }
+
+  async listCustomers() {
+    const result = await this.db.query<DbCustomer>(`SELECT id, name, description FROM core_customers ORDER BY name ASC`);
+    return result.rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description ?? undefined,
+    }));
+  }
+
+  async createProject(ctx: RequestContext, payload: { customerId: string; name: string; description?: string }) {
+    this.assertHrAdmin(ctx);
+    const customerId = payload.customerId?.trim();
+    if (!customerId) {
+      throw new BadRequestException('Customer is required.');
+    }
+    await this.ensureCustomerExists(customerId);
+
+    const name = payload.name?.trim();
+    if (!name) {
+      throw new BadRequestException('Project name is required.');
+    }
+
+    const project: Project = {
+      id: this.id('proj'),
+      customerId,
+      name,
+      description: payload.description?.trim() || undefined,
+    };
+
+    await this.db.query(`INSERT INTO core_projects (id, customer_id, name, description) VALUES ($1, $2, $3, $4)`, [
+      project.id,
+      project.customerId,
+      project.name,
+      project.description ?? null,
+    ]);
+
+    await this.opsService.addAudit({
+      actorId: ctx.employeeId || 'hr_admin',
+      action: 'project.created',
+      entity: 'project',
+      entityId: project.id,
+      metadata: { name: project.name, customerId: project.customerId },
+    });
+
+    return project;
+  }
+
+  async listProjects() {
+    const result = await this.db.query<DbProject>(
+      `
+      SELECT p.id, p.customer_id, c.name AS customer_name, p.name, p.description
+      FROM core_projects p
+      LEFT JOIN core_customers c ON c.id = p.customer_id
+      ORDER BY p.name ASC
+      `,
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      customerId: row.customer_id ?? '',
+      customerName: row.customer_name ?? undefined,
+      name: row.name,
+      description: row.description ?? undefined,
+    }));
   }
 
   async createDepartment(ctx: RequestContext, payload: { name: string; code?: string }) {
@@ -516,6 +650,13 @@ export class CoreHrService implements OnModuleInit {
     const result = await this.db.query<{ id: string }>(`SELECT id FROM core_employees WHERE id = $1 LIMIT 1`, [employeeId]);
     if (!result.rows[0]) {
       throw new BadRequestException('Manager/Employee reference does not exist.');
+    }
+  }
+
+  private async ensureCustomerExists(customerId: string) {
+    const result = await this.db.query<{ id: string }>(`SELECT id FROM core_customers WHERE id = $1 LIMIT 1`, [customerId]);
+    if (!result.rows[0]) {
+      throw new BadRequestException('Customer does not exist.');
     }
   }
 

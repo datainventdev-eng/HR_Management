@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearSession, defaultRouteForRole, getSession, setSession } from '../lib.session';
+import { FeedbackMessage } from '../components/ui-feedback';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
@@ -81,7 +82,7 @@ export default function ChangePasswordPage() {
           />
           <button type="submit">Save Password</button>
         </form>
-        <small>{message}</small>
+        <FeedbackMessage message={message} />
       </section>
     </main>
   );

@@ -21,6 +21,26 @@ export class CoreHrController {
     return this.coreHrService.createDepartment(this.ctx(headers), body);
   }
 
+  @Get('customers')
+  listCustomers() {
+    return this.coreHrService.listCustomers();
+  }
+
+  @Post('customers')
+  createCustomer(@Headers() headers: Record<string, string>, @Body() body: { name: string; description?: string }) {
+    return this.coreHrService.createCustomer(this.ctx(headers), body);
+  }
+
+  @Get('projects')
+  listProjects() {
+    return this.coreHrService.listProjects();
+  }
+
+  @Post('projects')
+  createProject(@Headers() headers: Record<string, string>, @Body() body: { customerId: string; name: string; description?: string }) {
+    return this.coreHrService.createProject(this.ctx(headers), body);
+  }
+
   @Get('employees')
   listEmployees(@Headers() headers: Record<string, string>) {
     return this.coreHrService.listEmployees(this.ctx(headers));

@@ -50,7 +50,17 @@ export class AuthService {
 
   async createUserByAdmin(
     actor: { role: UserRole; id: string },
-    payload: { email: string; fullName: string; role: UserRole; employeeId?: string },
+    payload: {
+      email: string;
+      fullName: string;
+      role: UserRole;
+      employeeId?: string;
+      joinDate?: string;
+      departmentId?: string;
+      title?: string;
+      managerId?: string;
+      status?: 'active' | 'inactive';
+    },
   ) {
     if (actor.role !== 'hr_admin') {
       throw new UnauthorizedException('Only HR Admin can create users.');
@@ -66,6 +76,7 @@ export class AuthService {
       throw new BadRequestException('User with this email already exists.');
     }
 
+    const linkedEmployeeProfileId = await this.resolveEmployeeProfileIdForProvisioning(payload);
     const temporaryPassword = this.generateTemporaryPassword();
     const passwordHash = await hash(temporaryPassword, 10);
 
@@ -75,7 +86,7 @@ export class AuthService {
       VALUES ($1, $2, $3, $4, TRUE, $5)
       RETURNING *
       `,
-      [email, payload.fullName.trim(), payload.role, payload.employeeId ?? null, passwordHash],
+      [email, payload.fullName.trim(), payload.role, linkedEmployeeProfileId, passwordHash],
     );
 
     const user = result.rows[0];
@@ -89,6 +100,7 @@ export class AuthService {
         mustChangePassword: user.must_change_password,
       },
       temporaryPassword,
+      provisionedEmployeeProfileId: linkedEmployeeProfileId,
     };
   }
 
@@ -266,6 +278,113 @@ export class AuthService {
   private async findUserById(id: string) {
     const result = await this.db.query<AppUser>(`SELECT * FROM app_users WHERE id = $1 LIMIT 1`, [id]);
     return result.rows[0] ?? null;
+  }
+
+  private async resolveEmployeeProfileIdForProvisioning(payload: {
+    email: string;
+    fullName: string;
+    role: UserRole;
+    employeeId?: string;
+    joinDate?: string;
+    departmentId?: string;
+    title?: string;
+    managerId?: string;
+    status?: 'active' | 'inactive';
+  }) {
+    if (payload.role !== 'employee' && payload.role !== 'manager') {
+      return payload.employeeId ?? null;
+    }
+
+    await this.ensureCoreHrSchema();
+
+    if (payload.employeeId) {
+      const existing = await this.db.query<{ id: string }>(`SELECT id FROM core_employees WHERE id = $1 LIMIT 1`, [payload.employeeId]);
+      if (!existing.rows[0]) {
+        throw new BadRequestException('Provided employee profile ID does not exist.');
+      }
+      return payload.employeeId;
+    }
+
+    const departmentId = payload.departmentId || (await this.ensureDefaultDepartment());
+    const joinDate = payload.joinDate || new Date().toISOString().slice(0, 10);
+    const profileId = this.id('emp');
+    const employeeCode = this.generateEmployeeCode();
+    const title = payload.title || (payload.role === 'manager' ? 'Manager' : 'Employee');
+    const status = payload.status || 'active';
+
+    if (payload.departmentId) {
+      const dept = await this.db.query<{ id: string }>(`SELECT id FROM core_departments WHERE id = $1 LIMIT 1`, [payload.departmentId]);
+      if (!dept.rows[0]) {
+        throw new BadRequestException('Selected department does not exist.');
+      }
+    }
+
+    if (payload.managerId) {
+      const manager = await this.db.query<{ id: string }>(`SELECT id FROM core_employees WHERE id = $1 LIMIT 1`, [payload.managerId]);
+      if (!manager.rows[0]) {
+        throw new BadRequestException('Selected manager does not exist.');
+      }
+    }
+
+    await this.db.query(
+      `
+      INSERT INTO core_employees (
+        id, full_name, employee_id, join_date, department_id, title, manager_id, status, phone, email, emergency_contact
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      `,
+      [profileId, payload.fullName.trim(), employeeCode, joinDate, departmentId, title, payload.managerId || null, status, null, payload.email, null],
+    );
+
+    return profileId;
+  }
+
+  private async ensureCoreHrSchema() {
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS core_departments (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        code TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS core_employees (
+        id TEXT PRIMARY KEY,
+        full_name TEXT NOT NULL,
+        employee_id TEXT UNIQUE NOT NULL,
+        join_date DATE NOT NULL,
+        department_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        manager_id TEXT,
+        status TEXT NOT NULL CHECK (status IN ('active','inactive')),
+        phone TEXT,
+        email TEXT,
+        emergency_contact JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT fk_core_department FOREIGN KEY (department_id) REFERENCES core_departments(id)
+      );
+    `);
+  }
+
+  private async ensureDefaultDepartment() {
+    const existing = await this.db.query<{ id: string }>(`SELECT id FROM core_departments ORDER BY created_at ASC LIMIT 1`);
+    if (existing.rows[0]) {
+      return existing.rows[0].id;
+    }
+
+    const deptId = this.id('dept');
+    await this.db.query(`INSERT INTO core_departments (id, name, code) VALUES ($1, $2, $3)`, [deptId, 'General', 'GEN']);
+    return deptId;
+  }
+
+  private generateEmployeeCode() {
+    return `EMP-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  }
+
+  private id(prefix: string) {
+    return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
   }
 
   private generateTemporaryPassword() {

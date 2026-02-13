@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { getSession } from '../lib.session';
+import { FeedbackMessage } from '../components/ui-feedback';
 
 type ComponentRow = { id: string; employeeId: string; type: 'earning' | 'deduction'; name: string; amount: number };
 type EntryRow = { employeeId: string; month: string; gross: number; deductions: number; net: number; status: 'Draft' | 'Finalized' };
@@ -128,7 +129,7 @@ export default function PayrollPage() {
             <button type="button" onClick={finalize}>Finalize</button>
           </div>
         </div>
-        <small>{message}</small>
+        <FeedbackMessage message={message} />
       </header>
 
       <section className="core-hr-grid">

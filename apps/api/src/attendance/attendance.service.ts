@@ -198,49 +198,50 @@ export class AttendanceService implements OnModuleInit {
     const date = payload?.date ?? this.today();
     const time = payload?.time ?? this.currentTime();
     const officeHours = await this.getOfficeHours();
-
-    const existing = await this.db.query<DbAttendanceRecord>(
-      `SELECT * FROM attendance_records WHERE employee_id = $1 AND date = $2 LIMIT 1`,
-      [ctx.employeeId, date],
-    );
-
-    const record = existing.rows[0];
-    if (record?.check_in_time) {
+    const result = await this.upsertCheckInRecord(ctx.employeeId, date, time, officeHours.startTime);
+    if (result.status === 'skipped') {
       throw new BadRequestException('You already checked in for this day.');
     }
+    return result.record;
+  }
 
-    if (!record) {
-      const created: AttendanceRecord = {
-        id: this.id('att'),
-        employeeId: ctx.employeeId,
-        date,
-        checkInTime: time,
-        isLate: this.isAfter(time, officeHours.startTime),
-        leftEarly: false,
-      };
+  async bulkCheckInByAdmin(
+    ctx: AttendanceContext,
+    payload: { entries: Array<{ employeeId: string; date?: string; time?: string }> },
+  ) {
+    this.assertHrAdmin(ctx);
 
-      await this.db.query(
-        `
-        INSERT INTO attendance_records (id, employee_id, date, check_in_time, is_late, left_early, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, NOW())
-        `,
-        [created.id, created.employeeId, created.date, created.checkInTime, created.isLate, created.leftEarly],
-      );
-
-      return created;
+    if (!payload.entries?.length) {
+      throw new BadRequestException('At least one entry is required.');
     }
 
-    await this.db.query(
-      `
-      UPDATE attendance_records
-      SET check_in_time = $3, is_late = $4, updated_at = NOW()
-      WHERE id = $1 AND employee_id = $2
-      `,
-      [record.id, ctx.employeeId, time, this.isAfter(time, officeHours.startTime)],
-    );
+    const officeHours = await this.getOfficeHours();
+    const results: Array<{ employeeId: string; date: string; status: 'created' | 'updated' | 'skipped'; record: AttendanceRecord }> = [];
 
-    const refreshed = await this.db.query<DbAttendanceRecord>(`SELECT * FROM attendance_records WHERE id = $1 LIMIT 1`, [record.id]);
-    return this.mapRecord(refreshed.rows[0]);
+    for (const entry of payload.entries) {
+      if (!entry.employeeId?.trim()) {
+        throw new BadRequestException('Each entry must include employeeId.');
+      }
+      const date = entry.date ?? this.today();
+      const time = entry.time ?? this.currentTime();
+      const output = await this.upsertCheckInRecord(entry.employeeId.trim(), date, time, officeHours.startTime);
+      results.push({
+        employeeId: entry.employeeId.trim(),
+        date,
+        status: output.status,
+        record: output.record,
+      });
+    }
+
+    return {
+      message: `Processed ${results.length} check-in entries.`,
+      summary: {
+        created: results.filter((item) => item.status === 'created').length,
+        updated: results.filter((item) => item.status === 'updated').length,
+        skipped: results.filter((item) => item.status === 'skipped').length,
+      },
+      results,
+    };
   }
 
   async checkOut(ctx: AttendanceContext, payload?: { date?: string; time?: string }) {
@@ -352,6 +353,51 @@ export class AttendanceService implements OnModuleInit {
       lateCount: Number(result.rows[0]?.late_count || '0'),
       earlyLeaveCount: Number(result.rows[0]?.early_leave_count || '0'),
     };
+  }
+
+  private async upsertCheckInRecord(employeeId: string, date: string, time: string, officeStartTime: string) {
+    const existing = await this.db.query<DbAttendanceRecord>(
+      `SELECT * FROM attendance_records WHERE employee_id = $1 AND date = $2 LIMIT 1`,
+      [employeeId, date],
+    );
+
+    const record = existing.rows[0];
+    if (!record) {
+      const created: AttendanceRecord = {
+        id: this.id('att'),
+        employeeId,
+        date,
+        checkInTime: time,
+        isLate: this.isAfter(time, officeStartTime),
+        leftEarly: false,
+      };
+
+      await this.db.query(
+        `
+        INSERT INTO attendance_records (id, employee_id, date, check_in_time, is_late, left_early, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        `,
+        [created.id, created.employeeId, created.date, created.checkInTime, created.isLate, created.leftEarly],
+      );
+
+      return { status: 'created' as const, record: created };
+    }
+
+    if (record.check_in_time) {
+      return { status: 'skipped' as const, record: this.mapRecord(record) };
+    }
+
+    await this.db.query(
+      `
+      UPDATE attendance_records
+      SET check_in_time = $3, is_late = $4, updated_at = NOW()
+      WHERE id = $1 AND employee_id = $2
+      `,
+      [record.id, employeeId, time, this.isAfter(time, officeStartTime)],
+    );
+
+    const refreshed = await this.db.query<DbAttendanceRecord>(`SELECT * FROM attendance_records WHERE id = $1 LIMIT 1`, [record.id]);
+    return { status: 'updated' as const, record: this.mapRecord(refreshed.rows[0]) };
   }
 
   private assertHrAdmin(ctx: AttendanceContext) {

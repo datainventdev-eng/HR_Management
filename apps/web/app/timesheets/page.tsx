@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { getSession } from '../lib.session';
+import { FeedbackMessage } from '../components/ui-feedback';
 
 type Sheet = {
   id: string;
@@ -153,7 +154,7 @@ export default function TimesheetsPage() {
             <button type="button" onClick={loadManagerQueue}>Manager Queue</button>
           </div>
         </div>
-        <small>{message}</small>
+        <FeedbackMessage message={message} />
       </header>
 
       <section className="core-hr-grid">

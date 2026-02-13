@@ -49,6 +49,14 @@ export class AttendanceController {
     return this.attendanceService.checkIn(this.ctx(headers), body);
   }
 
+  @Post('admin/bulk-check-in')
+  bulkCheckIn(
+    @Headers() headers: Record<string, string>,
+    @Body() body: { entries: Array<{ employeeId: string; date?: string; time?: string }> },
+  ) {
+    return this.attendanceService.bulkCheckInByAdmin(this.ctx(headers), body);
+  }
+
   @Post('check-out')
   checkOut(@Headers() headers: Record<string, string>, @Body() body?: { date?: string; time?: string }) {
     return this.attendanceService.checkOut(this.ctx(headers), body);
