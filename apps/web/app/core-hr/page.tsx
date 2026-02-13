@@ -194,6 +194,7 @@ export default function CoreHrPage() {
         <h1>Core HR</h1>
         <p>V1 workflows for departments, employee management, and lifecycle history.</p>
         <small>New employee creation is handled from User Access.</small>
+        <input className="core-hr-search" aria-label="Core HR Search" placeholder="Search employees, departments, customers, or projects..." />
         <div className="core-hr-actions">
           <button type="button" onClick={seedDemo}>
             Seed Demo Data
