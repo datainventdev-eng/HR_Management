@@ -62,6 +62,11 @@ export class AttendanceController {
     return this.attendanceService.checkOut(this.ctx(headers), body);
   }
 
+  @Get('today')
+  today(@Headers() headers: Record<string, string>, @Query('date') date?: string, @Query('employeeId') employeeId?: string) {
+    return this.attendanceService.todayRecord(this.ctx(headers), { date, employeeId });
+  }
+
   @Get('monthly')
   monthly(
     @Headers() headers: Record<string, string>,

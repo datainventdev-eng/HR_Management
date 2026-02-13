@@ -583,6 +583,153 @@ a:focus-visible {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.timesheet-home-card {
+  display: grid;
+  gap: 18px;
+}
+
+.timesheet-total-band {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f3f5f8;
+  padding: 16px;
+}
+
+.timesheet-total-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.timesheet-total-grid strong {
+  display: block;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.timesheet-total-grid small {
+  display: block;
+  margin-top: 4px;
+}
+
+.timesheet-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.timesheet-option button {
+  border: 2px solid #6b7280;
+  border-radius: 999px;
+  background: #fff;
+  padding: 8px 18px;
+}
+
+.timesheet-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.timesheet-single-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.timesheet-single-grid label {
+  display: grid;
+  gap: 8px;
+}
+
+.timesheet-single-grid .checkbox-row,
+.timesheet-weekly-row .checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timesheet-single-grid .checkbox-row {
+  grid-column: 1 / span 2;
+}
+
+.timesheet-notes-row {
+  grid-column: 1 / -1;
+}
+
+.timesheet-actions-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  grid-column: 1 / -1;
+}
+
+.timesheet-weekly-form {
+  display: grid;
+  gap: 12px;
+}
+
+.timesheet-weekly-head {
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr repeat(7, 80px) 80px 84px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 8px;
+  background: #f3f5f8;
+  border: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.timesheet-weekly-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr repeat(7, 80px) 80px 84px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.timesheet-weekly-row select,
+.timesheet-weekly-row input,
+.timesheet-weekly-row textarea {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  background: #fff;
+}
+
+.timesheet-row-total {
+  text-align: center;
+  font-weight: 600;
+}
+
+.timesheet-billable {
+  grid-column: 1 / span 2;
+}
+
+.timesheet-row-notes {
+  grid-column: 3 / -1;
+}
+
+.timesheet-weekly-totals {
+  display: grid;
+  grid-template-columns: 1.2fr repeat(7, 80px) 80px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
 .employee-attendance-card {
   max-width: 520px;
   margin: 0 auto;
@@ -793,6 +940,21 @@ a:focus-visible {
   .core-hr-grid,
   .attendance-mini-grid {
     grid-template-columns: 1fr;
+  }
+
+  .timesheet-total-grid,
+  .timesheet-single-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .timesheet-weekly-form {
+    overflow-x: auto;
+  }
+
+  .timesheet-weekly-head,
+  .timesheet-weekly-row,
+  .timesheet-weekly-totals {
+    min-width: 980px;
   }
 
   .main-grid .attendance-card,

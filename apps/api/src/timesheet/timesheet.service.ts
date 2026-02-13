@@ -18,6 +18,45 @@ interface DbTimesheet {
   manager_comment: string | null;
 }
 
+interface DbCatalogCustomer {
+  id: string;
+  name: string;
+}
+
+interface DbCatalogProject {
+  id: string;
+  customer_id: string | null;
+  name: string;
+}
+
+interface DbSingleEntry {
+  id: string;
+  employee_id: string;
+  customer_id: string;
+  project_id: string;
+  billable: boolean;
+  start_date: string;
+  duration_minutes: number;
+  notes: string | null;
+}
+
+interface DbWeeklyRow {
+  id: string;
+  employee_id: string;
+  week_start_date: string;
+  customer_id: string;
+  project_id: string;
+  billable: boolean;
+  notes: string | null;
+  sun_hours: number;
+  mon_hours: number;
+  tue_hours: number;
+  wed_hours: number;
+  thu_hours: number;
+  fri_hours: number;
+  sat_hours: number;
+}
+
 @Injectable()
 export class TimesheetService implements OnModuleInit {
   constructor(
@@ -70,6 +109,275 @@ export class TimesheetService implements OnModuleInit {
         CONSTRAINT fk_timesheet_history_timesheet FOREIGN KEY (timesheet_id) REFERENCES timesheets(id) ON DELETE CASCADE
       );
     `);
+
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS timesheet_single_entries (
+        id TEXT PRIMARY KEY,
+        employee_id TEXT NOT NULL,
+        customer_id TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        billable BOOLEAN NOT NULL DEFAULT TRUE,
+        start_date DATE NOT NULL,
+        duration_minutes INTEGER NOT NULL CHECK (duration_minutes > 0),
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await this.db.query(`
+      CREATE TABLE IF NOT EXISTS timesheet_weekly_rows (
+        id TEXT PRIMARY KEY,
+        employee_id TEXT NOT NULL,
+        week_start_date DATE NOT NULL,
+        customer_id TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        billable BOOLEAN NOT NULL DEFAULT TRUE,
+        notes TEXT,
+        sun_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
+        mon_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
+        tue_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
+        wed_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
+        thu_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
+        fri_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
+        sat_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+  }
+
+  async catalog(ctx: TimesheetContext) {
+    if (!ctx.employeeId) {
+      throw new UnauthorizedException('Employee context is missing.');
+    }
+
+    const [customers, projects] = await Promise.all([
+      this.db.query<DbCatalogCustomer>(`SELECT id, name FROM core_customers ORDER BY name ASC`),
+      this.db.query<DbCatalogProject>(`SELECT id, customer_id, name FROM core_projects ORDER BY name ASC`),
+    ]);
+
+    return {
+      customers: customers.rows.map((row) => ({ id: row.id, name: row.name })),
+      projects: projects.rows.map((row) => ({ id: row.id, customerId: row.customer_id ?? '', name: row.name })),
+    };
+  }
+
+  async summary(ctx: TimesheetContext, payload?: { employeeId?: string; weekStartDate?: string }) {
+    const employeeId = this.resolveEmployeeId(ctx, payload?.employeeId);
+    const now = new Date();
+    const month = now.toISOString().slice(0, 7);
+    const weekStartDate = payload?.weekStartDate ?? this.startOfWeek(now);
+
+    const weeklyRows = await this.db.query<{ total: string }>(
+      `
+      SELECT COALESCE(SUM(
+          sun_hours + mon_hours + tue_hours + wed_hours + thu_hours + fri_hours + sat_hours
+      ), 0)::text AS total
+      FROM timesheet_weekly_rows
+      WHERE employee_id = $1 AND week_start_date = $2
+      `,
+      [employeeId, weekStartDate],
+    );
+
+    const weeklySingle = await this.db.query<{ total: string }>(
+      `
+      SELECT COALESCE(SUM(duration_minutes), 0)::text AS total
+      FROM timesheet_single_entries
+      WHERE employee_id = $1
+        AND start_date >= $2::date
+        AND start_date < ($2::date + INTERVAL '7 day')
+      `,
+      [employeeId, weekStartDate],
+    );
+
+    const monthlyRows = await this.db.query<{ total: string }>(
+      `
+      SELECT COALESCE(SUM(
+          sun_hours + mon_hours + tue_hours + wed_hours + thu_hours + fri_hours + sat_hours
+      ), 0)::text AS total
+      FROM timesheet_weekly_rows
+      WHERE employee_id = $1
+        AND TO_CHAR(week_start_date, 'YYYY-MM') = $2
+      `,
+      [employeeId, month],
+    );
+
+    const monthlySingle = await this.db.query<{ total: string }>(
+      `
+      SELECT COALESCE(SUM(duration_minutes), 0)::text AS total
+      FROM timesheet_single_entries
+      WHERE employee_id = $1
+        AND TO_CHAR(start_date, 'YYYY-MM') = $2
+      `,
+      [employeeId, month],
+    );
+
+    const weekHours = Number(weeklyRows.rows[0]?.total || '0') + Number(weeklySingle.rows[0]?.total || '0') / 60;
+    const monthHours = Number(monthlyRows.rows[0]?.total || '0') + Number(monthlySingle.rows[0]?.total || '0') / 60;
+
+    return {
+      weekStartDate,
+      weekEndDate: this.shiftDate(weekStartDate, 6),
+      thisWeekTotal: this.hoursToHhMm(weekHours),
+      thisMonthTotal: this.hoursToHhMm(monthHours),
+      monthLabel: now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    };
+  }
+
+  async saveSingleEntry(
+    ctx: TimesheetContext,
+    payload: { customerId: string; projectId: string; billable: boolean; startDate: string; duration: string; notes?: string },
+  ) {
+    const employeeId = this.resolveEmployeeId(ctx);
+    await this.ensureCustomerProjectRelation(payload.customerId, payload.projectId);
+    const durationMinutes = this.parseDuration(payload.duration);
+
+    const entryId = this.id('tsse');
+    await this.db.query(
+      `
+      INSERT INTO timesheet_single_entries
+      (id, employee_id, customer_id, project_id, billable, start_date, duration_minutes, notes, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+      `,
+      [entryId, employeeId, payload.customerId, payload.projectId, payload.billable, payload.startDate, durationMinutes, payload.notes ?? null],
+    );
+
+    return { id: entryId, success: true };
+  }
+
+  async listSingleEntries(ctx: TimesheetContext, payload?: { date?: string; employeeId?: string }) {
+    const employeeId = this.resolveEmployeeId(ctx, payload?.employeeId);
+    const date = payload?.date ?? this.today();
+    const result = await this.db.query<DbSingleEntry>(
+      `
+      SELECT id, employee_id, customer_id, project_id, billable, start_date, duration_minutes, notes
+      FROM timesheet_single_entries
+      WHERE employee_id = $1 AND start_date = $2
+      ORDER BY created_at DESC
+      `,
+      [employeeId, date],
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      employeeId: row.employee_id,
+      customerId: row.customer_id,
+      projectId: row.project_id,
+      billable: row.billable,
+      startDate: row.start_date,
+      duration: this.minutesToDuration(row.duration_minutes),
+      notes: row.notes ?? '',
+    }));
+  }
+
+  async saveWeeklyRows(
+    ctx: TimesheetContext,
+    payload: {
+      weekStartDate: string;
+      rows: Array<{
+        customerId: string;
+        projectId: string;
+        billable: boolean;
+        notes?: string;
+        hours: { sun: number; mon: number; tue: number; wed: number; thu: number; fri: number; sat: number };
+      }>;
+    },
+  ) {
+    const employeeId = this.resolveEmployeeId(ctx);
+    if (!payload.rows?.length) {
+      throw new BadRequestException('At least one weekly row is required.');
+    }
+
+    await this.db.transaction(async (query) => {
+      await query(`DELETE FROM timesheet_weekly_rows WHERE employee_id = $1 AND week_start_date = $2`, [employeeId, payload.weekStartDate]);
+
+      for (const row of payload.rows) {
+        await this.ensureCustomerProjectRelation(row.customerId, row.projectId);
+        const values = [row.hours.sun, row.hours.mon, row.hours.tue, row.hours.wed, row.hours.thu, row.hours.fri, row.hours.sat];
+        if (values.some((hour) => hour < 0 || hour > 24)) {
+          throw new BadRequestException('Weekly hours must be between 0 and 24.');
+        }
+
+        await query(
+          `
+          INSERT INTO timesheet_weekly_rows
+          (id, employee_id, week_start_date, customer_id, project_id, billable, notes, sun_hours, mon_hours, tue_hours, wed_hours, thu_hours, fri_hours, sat_hours, updated_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW())
+          `,
+          [
+            this.id('tswr'),
+            employeeId,
+            payload.weekStartDate,
+            row.customerId,
+            row.projectId,
+            row.billable,
+            row.notes ?? null,
+            row.hours.sun,
+            row.hours.mon,
+            row.hours.tue,
+            row.hours.wed,
+            row.hours.thu,
+            row.hours.fri,
+            row.hours.sat,
+          ],
+        );
+      }
+    });
+
+    return this.listWeeklyRows(ctx, { weekStartDate: payload.weekStartDate, employeeId });
+  }
+
+  async listWeeklyRows(ctx: TimesheetContext, payload?: { weekStartDate?: string; employeeId?: string }) {
+    const employeeId = this.resolveEmployeeId(ctx, payload?.employeeId);
+    const weekStartDate = payload?.weekStartDate ?? this.startOfWeek(new Date());
+    const result = await this.db.query<DbWeeklyRow>(
+      `
+      SELECT id, employee_id, week_start_date, customer_id, project_id, billable, notes,
+             sun_hours, mon_hours, tue_hours, wed_hours, thu_hours, fri_hours, sat_hours
+      FROM timesheet_weekly_rows
+      WHERE employee_id = $1 AND week_start_date = $2
+      ORDER BY created_at ASC
+      `,
+      [employeeId, weekStartDate],
+    );
+
+    const rows = result.rows.map((row) => ({
+      id: row.id,
+      customerId: row.customer_id,
+      projectId: row.project_id,
+      billable: row.billable,
+      notes: row.notes ?? '',
+      hours: {
+        sun: Number(row.sun_hours),
+        mon: Number(row.mon_hours),
+        tue: Number(row.tue_hours),
+        wed: Number(row.wed_hours),
+        thu: Number(row.thu_hours),
+        fri: Number(row.fri_hours),
+        sat: Number(row.sat_hours),
+      },
+    }));
+
+    const totals = rows.reduce(
+      (acc, row) => {
+        acc.sun += row.hours.sun;
+        acc.mon += row.hours.mon;
+        acc.tue += row.hours.tue;
+        acc.wed += row.hours.wed;
+        acc.thu += row.hours.thu;
+        acc.fri += row.hours.fri;
+        acc.sat += row.hours.sat;
+        return acc;
+      },
+      { sun: 0, mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0 },
+    );
+
+    return {
+      weekStartDate,
+      rows,
+      totals: { ...totals, total: totals.sun + totals.mon + totals.tue + totals.wed + totals.thu + totals.fri + totals.sat },
+    };
   }
 
   async setManagerMap(ctx: TimesheetContext, payload: EmployeeManagerMap) {
@@ -357,6 +665,74 @@ export class TimesheetService implements OnModuleInit {
     }
   }
 
+  private resolveEmployeeId(ctx: TimesheetContext, requestedEmployeeId?: string) {
+    if (ctx.role === 'employee') {
+      if (!ctx.employeeId) throw new UnauthorizedException('Employee context is missing.');
+      return ctx.employeeId;
+    }
+
+    if (requestedEmployeeId) return requestedEmployeeId;
+    if (ctx.employeeId) return ctx.employeeId;
+    throw new BadRequestException('Employee ID is required.');
+  }
+
+  private async ensureCustomerProjectRelation(customerId: string, projectId: string) {
+    if (!customerId?.trim() || !projectId?.trim()) {
+      throw new BadRequestException('Customer and service are required.');
+    }
+    const project = await this.db.query<{ id: string; customer_id: string | null }>(
+      `SELECT id, customer_id FROM core_projects WHERE id = $1 LIMIT 1`,
+      [projectId],
+    );
+    const row = project.rows[0];
+    if (!row) {
+      throw new BadRequestException('Selected service/project does not exist.');
+    }
+    if ((row.customer_id ?? '') !== customerId) {
+      throw new BadRequestException('Selected service does not belong to selected customer.');
+    }
+  }
+
+  private parseDuration(input: string) {
+    const trimmed = input.trim();
+    let total = 0;
+
+    if (trimmed.includes(':')) {
+      const parts = trimmed.split(':');
+      if (parts.length !== 2) {
+        throw new BadRequestException('Duration format is invalid. Use 4, 4.5, or 4:20.');
+      }
+      const hours = Number(parts[0]);
+      const minutes = Number(parts[1]);
+      if (Number.isNaN(hours) || Number.isNaN(minutes) || hours < 0 || minutes < 0 || minutes > 59) {
+        throw new BadRequestException('Duration format is invalid. Use 4, 4.5, or 4:20.');
+      }
+      total = hours * 60 + minutes;
+    } else {
+      const numeric = Number(trimmed);
+      if (Number.isNaN(numeric) || numeric <= 0) {
+        throw new BadRequestException('Duration format is invalid. Use 4, 4.5, or 4:20.');
+      }
+      total = Math.round(numeric * 60);
+    }
+
+    if (total <= 0) {
+      throw new BadRequestException('Duration must be greater than 00:00.');
+    }
+    return total;
+  }
+
+  private minutesToDuration(totalMinutes: number) {
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  private hoursToHhMm(hours: number) {
+    const totalMinutes = Math.round(hours * 60);
+    return this.minutesToDuration(totalMinutes);
+  }
+
   private async getTimesheetById(id: string): Promise<Timesheet> {
     const timesheetResult = await this.db.query<DbTimesheet>(`SELECT * FROM timesheets WHERE id = $1 LIMIT 1`, [id]);
     const sheet = timesheetResult.rows[0];
@@ -393,5 +769,22 @@ export class TimesheetService implements OnModuleInit {
 
   private id(prefix: string) {
     return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  private today() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  private startOfWeek(date: Date) {
+    const d = new Date(date);
+    const day = d.getDay(); // Sun=0
+    d.setDate(d.getDate() - day);
+    return d.toISOString().slice(0, 10);
+  }
+
+  private shiftDate(dateIso: string, days: number) {
+    const d = new Date(`${dateIso}T00:00:00.000Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
   }
 }

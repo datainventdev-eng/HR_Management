@@ -317,6 +317,26 @@ export class AttendanceService implements OnModuleInit {
     return result.rows.map((row) => this.mapRecord(row));
   }
 
+  async todayRecord(ctx: AttendanceContext, payload?: { date?: string; employeeId?: string }) {
+    const date = payload?.date ?? this.today();
+    let targetEmployeeId = payload?.employeeId;
+
+    if (ctx.role === 'employee') {
+      targetEmployeeId = ctx.employeeId;
+    }
+
+    if (!targetEmployeeId) {
+      throw new BadRequestException('Employee ID is required for this view.');
+    }
+
+    const result = await this.db.query<DbAttendanceRecord>(
+      `SELECT * FROM attendance_records WHERE employee_id = $1 AND date = $2 LIMIT 1`,
+      [targetEmployeeId, date],
+    );
+
+    return result.rows[0] ? this.mapRecord(result.rows[0]) : null;
+  }
+
   async seedDemoData() {
     const result = await this.db.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM attendance_shifts`);
     if (Number(result.rows[0]?.count || '0') === 0) {
