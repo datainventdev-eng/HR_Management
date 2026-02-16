@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import AuthGate from './auth-gate';
-import { NetworkProgressBar } from './components/ui-feedback';
+import { AutoRefreshOnReturn, NetworkProgressBar } from './components/ui-feedback';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -18,6 +18,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body className={inter.className}>
+        <AutoRefreshOnReturn thresholdMinutes={30} />
         <NetworkProgressBar />
         <AuthGate>{children}</AuthGate>
       </body>

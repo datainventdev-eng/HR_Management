@@ -356,11 +356,17 @@ export class AttendanceService implements OnModuleInit {
   }
 
   async todaySummary(date = this.today()) {
-    const result = await this.db.query<{ present_count: string; late_count: string; early_leave_count: string }>(
+    const result = await this.db.query<{
+      present_count: string;
+      late_count: string;
+      early_leave_count: string;
+      partial_present_count: string;
+    }>(
       `
       SELECT COUNT(*) FILTER (WHERE check_in_time IS NOT NULL)::text AS present_count,
              COUNT(*) FILTER (WHERE is_late = TRUE)::text AS late_count,
-             COUNT(*) FILTER (WHERE left_early = TRUE)::text AS early_leave_count
+             COUNT(*) FILTER (WHERE left_early = TRUE)::text AS early_leave_count,
+             COUNT(*) FILTER (WHERE total_hours IS NOT NULL AND total_hours < 7)::text AS partial_present_count
       FROM attendance_records
       WHERE date = $1
       `,
@@ -372,6 +378,7 @@ export class AttendanceService implements OnModuleInit {
       presentCount: Number(result.rows[0]?.present_count || '0'),
       lateCount: Number(result.rows[0]?.late_count || '0'),
       earlyLeaveCount: Number(result.rows[0]?.early_leave_count || '0'),
+      partialPresentCount: Number(result.rows[0]?.partial_present_count || '0'),
     };
   }
 

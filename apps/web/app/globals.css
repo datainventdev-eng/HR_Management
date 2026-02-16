@@ -416,22 +416,62 @@ small {
 .main-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 65% 35%;
+}
+
+.attendance-snapshot-layout {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  gap: 18px;
+  align-items: center;
+}
+
+.attendance-donut-col {
+  display: grid;
+  place-items: center;
+}
+
+.attendance-donut {
+  width: 216px;
+  height: 216px;
+  border-radius: 50%;
+  padding: 34px;
+  box-shadow: inset 0 -10px 18px rgba(255, 122, 18, 0.16);
+}
+
+.attendance-donut-center {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  border: 1px solid #ffe4cb;
+}
+
+.attendance-donut-center strong {
+  font-size: 1.9rem;
+  line-height: 1;
+}
+
+.attendance-donut-center small {
+  margin-top: 0;
+  line-height: 1.05;
+  color: #6c7583;
 }
 
 .attendance-bars {
-  margin-top: 12px;
-  border: 1px solid #ffdfc4;
-  border-radius: 8px;
-  background: #fffaf7;
-  padding: 12px;
   display: grid;
-  gap: 10px;
+  gap: 14px;
 }
 
 .attendance-bar-row {
   display: grid;
-  gap: 5px;
+  gap: 7px;
 }
 
 .attendance-bar-head {
@@ -443,37 +483,141 @@ small {
 
 .attendance-bar-track {
   width: 100%;
-  height: 9px;
-  background: #eef1f5;
-  border-radius: 10px;
+  height: 12px;
+  background: #edf0f4;
+  border-radius: 999px;
   overflow: hidden;
 }
 
 .attendance-bar-fill {
   height: 100%;
-  border-radius: 10px;
+  border-radius: 999px;
 }
 
 .attendance-bar-fill.on-time {
-  background: #ff8a2f;
+  background: linear-gradient(90deg, #ff7a12 0%, #ff9f45 100%);
 }
 
 .attendance-bar-fill.late {
-  background: #f8b03f;
+  background: linear-gradient(90deg, #ff9f45 0%, #ffbc7a 100%);
 }
 
 .attendance-bar-fill.early {
-  background: #f67a2f;
+  background: linear-gradient(90deg, #ffbc7a 0%, #ffd3a5 100%);
 }
 
 .attendance-bar-fill.absent {
-  background: #9ea7b3;
+  background: linear-gradient(90deg, #ffd7b2 0%, #ffe8d3 100%);
 }
 
-.schedule-card ul {
-  margin-top: 14px;
-  display: grid;
+.schedule-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.schedule-nav {
+  display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.schedule-nav button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff8f2;
+  color: #a54d06;
+  padding: 6px 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.schedule-nav button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.schedule-range-label {
+  font-size: 0.7rem;
+  color: #485262;
+  font-weight: 600;
+  white-space: nowrap;
+  background: #fff6ee;
+  border: 1px solid #ffdcbf;
+  border-radius: 999px;
+  padding: 5px 10px;
+  line-height: 1;
+}
+
+.schedule-timeline-scroll {
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.schedule-timeline-inner {
+  min-width: 0;
+  width: 100%;
+}
+
+.schedule-hours-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  color: #2f3744;
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 0.74rem;
+}
+
+.schedule-timeline-body {
+  position: relative;
+  height: 190px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.schedule-hour-guide {
+  border-left: 1px dashed #d9dee5;
+  height: 100%;
+}
+
+.schedule-hour-guide:last-child {
+  border-right: 1px dashed #d9dee5;
+}
+
+.schedule-event-pill {
+  position: absolute;
+  border-radius: 999px;
+  padding: 7px 9px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.schedule-event-pill.primary {
+  background: linear-gradient(90deg, #ff7a12 0%, #ff9440 100%);
+}
+
+.schedule-event-pill.soft {
+  background: linear-gradient(90deg, #ff9d55 0%, #ffbb84 100%);
+}
+
+.schedule-event-pill.muted {
+  background: linear-gradient(90deg, #ffc79f 0%, #ffd7bd 100%);
+  color: #8a4c14;
+}
+
+.schedule-empty {
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  color: #6f7782;
 }
 
 .lower-grid {
@@ -939,6 +1083,222 @@ a:focus-visible {
   justify-items: center;
 }
 
+.employee-dashboard-shell {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.employee-global-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  min-height: 62px;
+  background: linear-gradient(180deg, #ff7f17 0%, #ff760f 100%);
+  border-bottom: 1px solid #df6f13;
+}
+
+.employee-dashboard-main {
+  padding: 14px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.employee-left-panel {
+  max-width: none;
+  margin: 0;
+  min-height: calc(100vh - 96px);
+}
+
+.employee-insights-column {
+  display: grid;
+  gap: 16px;
+}
+
+.employee-graph-card {
+  min-height: 188px;
+}
+
+.employee-graph-card h3 {
+  margin-bottom: 10px;
+}
+
+.employee-status-card {
+  min-height: 338px;
+}
+
+.employee-status-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.employee-month-select {
+  min-height: 34px;
+  max-width: 220px;
+  font-size: 0.76rem;
+}
+
+.employee-status-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.employee-status-chips span {
+  border: 1px solid #ffd8b8;
+  background: #fff5eb;
+  color: #94561e;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.employee-status-chips span.full {
+  background: #e8f8ee;
+  border-color: #b9e8c8;
+  color: #2f7d47;
+}
+
+.employee-status-chips span.partial {
+  background: #ffe8e8;
+  border-color: #f6b7b7;
+  color: #b43b3b;
+}
+
+.employee-status-chips span.late {
+  background: #ffe7d1;
+  border-color: #ffc998;
+  color: #a95f20;
+}
+
+.employee-status-chips span.absent {
+  background: #fff6d9;
+  border-color: #ddb64f;
+  color: #6f5612;
+}
+
+.employee-status-calendar {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.calendar-spacer {
+  height: 34px;
+}
+
+.calendar-day {
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #ffe0c7;
+  background: #fff9f3;
+  color: #5f6875;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.calendar-day.full {
+  background: #e8f8ee;
+  border-color: #b9e8c8;
+}
+
+.calendar-day.partial {
+  background: #ffe8e8;
+  border-color: #f6b7b7;
+}
+
+.calendar-day.late {
+  background: #ffe7d1;
+  border-color: #ffc998;
+}
+
+.calendar-day.absent {
+  background: #ffeebd;
+  border-color: #ddb64f;
+  color: #6f5612;
+}
+
+.calendar-day.active {
+  outline: 2px solid #ff7a12;
+  outline-offset: 1px;
+}
+
+.calendar-day.inactive {
+  background: #fff;
+  border-color: #e2e7ee;
+  color: #9ca6b3;
+}
+
+.employee-graph-placeholder {
+  min-height: 126px;
+  border: 1px dashed #ffcfaa;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #a76328;
+  background: #fffaf5;
+}
+
+.employee-status-legend {
+  margin-top: 10px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+  color: #596371;
+}
+
+.employee-status-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.employee-status-legend .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.employee-status-legend .dot.full {
+  background: #30b25a;
+}
+
+.employee-status-legend .dot.partial {
+  background: #e55555;
+}
+
+.employee-status-legend .dot.late {
+  background: #ff8a2f;
+}
+
+.employee-status-legend .dot.absent {
+  background: #d4a72c;
+}
+
+.employee-day-detail {
+  margin-top: 10px;
+  border: 1px solid #ffe2ca;
+  border-radius: 9px;
+  background: #fffaf5;
+  padding: 8px 10px;
+  display: grid;
+  gap: 2px;
+}
+
+.employee-day-detail small {
+  color: #6b7582;
+}
+
 .employee-clock {
   font-size: 2.4rem;
   line-height: 1;
@@ -1092,7 +1452,8 @@ a:focus-visible {
   .kpi-grid,
   .main-grid,
   .lower-grid,
-  .core-hr-grid {
+  .core-hr-grid,
+  .employee-dashboard-main {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -1139,8 +1500,27 @@ a:focus-visible {
   .quick-actions,
   .compact-grid,
   .core-hr-grid,
-  .attendance-mini-grid {
+  .attendance-mini-grid,
+  .attendance-snapshot-layout,
+  .employee-dashboard-main {
     grid-template-columns: 1fr;
+  }
+
+  .employee-left-panel {
+    min-height: auto;
+  }
+
+  .employee-status-calendar {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .employee-status-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .employee-month-select {
+    max-width: 100%;
   }
 
   .timesheet-total-grid,
@@ -1180,5 +1560,18 @@ a:focus-visible {
   .projects-filter {
     min-width: 0;
     max-width: 220px;
+  }
+
+  .schedule-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .schedule-nav {
+    flex-wrap: wrap;
+  }
+
+  .schedule-timeline-inner {
+    min-width: 0;
   }
 }

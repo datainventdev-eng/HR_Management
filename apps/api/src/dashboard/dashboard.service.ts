@@ -60,13 +60,15 @@ export class DashboardService {
       present_count: string;
       late_count: string;
       early_leave_count: string;
+      partial_present_count: string;
     }>(
       `
       SELECT
         date::text AS date,
         COUNT(*) FILTER (WHERE check_in_time IS NOT NULL)::text AS present_count,
         COUNT(*) FILTER (WHERE is_late = TRUE)::text AS late_count,
-        COUNT(*) FILTER (WHERE left_early = TRUE)::text AS early_leave_count
+        COUNT(*) FILTER (WHERE left_early = TRUE)::text AS early_leave_count,
+        COUNT(*) FILTER (WHERE total_hours IS NOT NULL AND total_hours < 7)::text AS partial_present_count
       FROM attendance_records
       WHERE date >= $1::date
         AND date <= $2::date
@@ -83,6 +85,7 @@ export class DashboardService {
           present: Number(row.present_count || '0'),
           late: Number(row.late_count || '0'),
           earlyLeave: Number(row.early_leave_count || '0'),
+          partialPresent: Number(row.partial_present_count || '0'),
         },
       ]),
     );
@@ -92,24 +95,26 @@ export class DashboardService {
     const absentSeries: number[] = [];
     const lateSeries: number[] = [];
     const earlyLeaveSeries: number[] = [];
+    const partialPresentSeries: number[] = [];
     const onTimeSeries: number[] = [];
     const headcountSeries: number[] = [];
 
     for (const date of workingDays) {
-      const day = byDate.get(date) ?? { present: 0, late: 0, earlyLeave: 0 };
+      const day = byDate.get(date) ?? { present: 0, late: 0, earlyLeave: 0, partialPresent: 0 };
       const absent = Math.max(totalEmployees - day.present, 0);
-      const onTime = Math.max(day.present - day.late - day.earlyLeave, 0);
+      const onTime = Math.max(day.present - day.late - day.partialPresent, 0);
       presentSeries.push(day.present);
       absentSeries.push(absent);
       lateSeries.push(day.late);
       earlyLeaveSeries.push(day.earlyLeave);
+      partialPresentSeries.push(day.partialPresent);
       onTimeSeries.push(onTime);
       headcountSeries.push(totalEmployees);
     }
 
     const previousWorkingDate = this.previousWorkingDay(today);
-    const previous = byDate.get(previousWorkingDate) ?? { present: 0, late: 0, earlyLeave: 0 };
-    const todayRow = byDate.get(today) ?? { present: 0, late: 0, earlyLeave: 0 };
+    const previous = byDate.get(previousWorkingDate) ?? { present: 0, late: 0, earlyLeave: 0, partialPresent: 0 };
+    const todayRow = byDate.get(today) ?? { present: 0, late: 0, earlyLeave: 0, partialPresent: 0 };
 
     return {
       month,
@@ -120,6 +125,7 @@ export class DashboardService {
         absent: absentSeries,
         late: lateSeries,
         earlyLeave: earlyLeaveSeries,
+        partialPresent: partialPresentSeries,
         onTime: onTimeSeries,
       },
       deltaPercent: {
@@ -131,9 +137,10 @@ export class DashboardService {
         ),
         late: this.percentageDelta(todayRow.late, previous.late),
         earlyLeave: this.percentageDelta(todayRow.earlyLeave, previous.earlyLeave),
+        partialPresent: this.percentageDelta(todayRow.partialPresent, previous.partialPresent),
         onTime: this.percentageDelta(
-          Math.max(todayRow.present - todayRow.late - todayRow.earlyLeave, 0),
-          Math.max(previous.present - previous.late - previous.earlyLeave, 0),
+          Math.max(todayRow.present - todayRow.late - todayRow.partialPresent, 0),
+          Math.max(previous.present - previous.late - previous.partialPresent, 0),
         ),
       },
     };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export function FeedbackMessage({ message }: { message: string }) {
   if (!message?.trim()) return null;
@@ -62,4 +62,50 @@ export function NetworkProgressBar() {
       <div className="network-progress-bar" />
     </div>
   );
+}
+
+export function AutoRefreshOnReturn({ thresholdMinutes = 30 }: { thresholdMinutes?: number }) {
+  const awaySinceRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const thresholdMs = Math.max(1, thresholdMinutes) * 60 * 1000;
+
+    const markAway = () => {
+      if (awaySinceRef.current === null) {
+        awaySinceRef.current = Date.now();
+      }
+    };
+
+    const maybeRefresh = () => {
+      if (awaySinceRef.current === null) return;
+      const elapsed = Date.now() - awaySinceRef.current;
+      awaySinceRef.current = null;
+      if (elapsed >= thresholdMs) {
+        window.location.reload();
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        markAway();
+      } else if (document.visibilityState === 'visible') {
+        maybeRefresh();
+      }
+    };
+
+    const handleBlur = () => markAway();
+    const handleFocus = () => maybeRefresh();
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [thresholdMinutes]);
+
+  return null;
 }

@@ -19,6 +19,7 @@ type Overview = {
     presentCount: number;
     lateCount: number;
     earlyLeaveCount: number;
+    partialPresentCount?: number;
   };
   attendanceTrends: {
     month: string;
@@ -29,6 +30,7 @@ type Overview = {
       absent: number[];
       late: number[];
       earlyLeave: number[];
+      partialPresent?: number[];
       onTime: number[];
     };
     deltaPercent: {
@@ -37,6 +39,7 @@ type Overview = {
       absent: number;
       late: number;
       earlyLeave: number;
+      partialPresent?: number;
       onTime: number;
     };
   };
@@ -66,6 +69,7 @@ export default function HomePage() {
   const [projectScope, setProjectScope] = useState<'month' | 'all'>('month');
   const [projectHoursData, setProjectHoursData] = useState<Array<{ projectId: string; name: string; customerName?: string; hours: number }>>([]);
   const [projectHoursLoading, setProjectHoursLoading] = useState(false);
+  const [schedulePage, setSchedulePage] = useState(0);
 
   async function loadOverview(nextRole = role) {
     try {
@@ -148,7 +152,7 @@ export default function HomePage() {
     const presentToday = overview?.attendance.presentCount ?? overview?.kpis.presentToday ?? 0;
     const absentToday = Math.max(totalEmployees - presentToday, 0);
     const lateEmployees = overview?.attendance.lateCount ?? 0;
-    const earlyLeaveToday = overview?.attendance.earlyLeaveCount ?? 0;
+    const partialPresentToday = overview?.attendance.partialPresentCount ?? 0;
 
     const trends = overview?.attendanceTrends;
     return [
@@ -181,11 +185,11 @@ export default function HomePage() {
         delta: trends?.deltaPercent.late ?? 0,
       },
       {
-        label: 'Early Leave Today',
-        value: earlyLeaveToday,
-        sub: 'left before office end',
-        points: trends?.series.earlyLeave || [earlyLeaveToday],
-        delta: trends?.deltaPercent.earlyLeave ?? 0,
+        label: 'Partial Present Employees',
+        value: partialPresentToday,
+        sub: 'worked less than 7 hours',
+        points: trends?.series.partialPresent || [partialPresentToday],
+        delta: trends?.deltaPercent.partialPresent ?? 0,
       },
     ];
   }, [overview]);
@@ -245,9 +249,9 @@ export default function HomePage() {
     const apiTotal = overview?.kpis.totalEmployees ?? 0;
     const rawPresent = overview?.attendance.presentCount ?? 0;
     const rawLate = overview?.attendance.lateCount ?? 0;
-    const rawEarly = overview?.attendance.earlyLeaveCount ?? 0;
+    const rawPartialPresent = overview?.attendance.partialPresentCount ?? 0;
     const total = Math.max(apiTotal, rawPresent);
-    const onTime = Math.max(rawPresent - rawLate - rawEarly, 0);
+    const onTime = Math.max(rawPresent - rawLate - rawPartialPresent, 0);
     const absent = Math.max(total - rawPresent, 0);
 
     return {
@@ -256,11 +260,30 @@ export default function HomePage() {
       rows: [
         { key: 'on_time', label: 'On Time', value: onTime, tone: 'on-time' },
         { key: 'late', label: 'Late', value: rawLate, tone: 'late' },
-        { key: 'early', label: 'Early Leave', value: rawEarly, tone: 'early' },
+        { key: 'early', label: 'Partial Present', value: rawPartialPresent, tone: 'early' },
         { key: 'absent', label: 'Absent', value: absent, tone: 'absent' },
       ],
     };
   }, [overview]);
+  const attendanceDonutStyle = useMemo(() => {
+    const total = Math.max(attendanceSnapshot.total, 1);
+    const mapByTone = new Map(attendanceSnapshot.rows.map((row) => [row.tone, row.value]));
+    const onTimePct = (Number(mapByTone.get('on-time') || 0) / total) * 100;
+    const latePct = (Number(mapByTone.get('late') || 0) / total) * 100;
+    const earlyPct = (Number(mapByTone.get('early') || 0) / total) * 100;
+    const absentPct = (Number(mapByTone.get('absent') || 0) / total) * 100;
+    const p1 = onTimePct;
+    const p2 = p1 + latePct;
+    const p3 = p2 + earlyPct;
+    return {
+      background: `conic-gradient(
+        #ff7a12 0% ${p1}%,
+        #ff9f45 ${p1}% ${p2}%,
+        #ffbc7a ${p2}% ${p3}%,
+        #ffd7b2 ${p3}% 100%
+      )`,
+    };
+  }, [attendanceSnapshot]);
 
   const totalProjectHours = useMemo(
     () => projectHoursData.reduce((sum, item) => sum + item.hours, 0),
@@ -279,6 +302,112 @@ export default function HomePage() {
       }),
     [currentMonth],
   );
+  const scheduleBaseHour = useMemo(() => new Date().getHours(), []);
+  const hoursPerPage = 5;
+  const scheduleWindowStart = useMemo(() => {
+    const start = new Date();
+    start.setMinutes(0, 0, 0);
+    start.setHours(scheduleBaseHour + schedulePage * hoursPerPage);
+    return start;
+  }, [scheduleBaseHour, schedulePage]);
+  const scheduleWindowEnd = useMemo(() => {
+    const end = new Date(scheduleWindowStart);
+    end.setHours(end.getHours() + hoursPerPage);
+    return end;
+  }, [scheduleWindowStart]);
+  const visibleHourTicks = useMemo(
+    () =>
+      Array.from({ length: hoursPerPage }, (_, index) => {
+        const date = new Date(scheduleWindowStart);
+        date.setHours(date.getHours() + index);
+        return date;
+      }),
+    [scheduleWindowStart],
+  );
+  const scheduleRangeLabel = useMemo(() => {
+    const dateLabel = scheduleWindowStart.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+    const startHourRaw = scheduleWindowStart.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+    const endTick = new Date(scheduleWindowStart);
+    endTick.setHours(endTick.getHours() + (hoursPerPage - 1));
+    const endHourRaw = endTick.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+
+    const [startNum, startMeridiem] = startHourRaw.split(' ');
+    const [endNum, endMeridiem] = endHourRaw.split(' ');
+    const range =
+      startMeridiem === endMeridiem
+        ? `${startNum}-${endNum} ${startMeridiem}`
+        : `${startNum} ${startMeridiem} - ${endNum} ${endMeridiem}`;
+
+    return `${dateLabel} | ${range}`;
+  }, [hoursPerPage, scheduleWindowStart]);
+  const scheduleDummyEvents = useMemo(() => {
+    const base = new Date();
+    base.setMinutes(0, 0, 0);
+    return [
+      {
+        id: 'sch_1',
+        title: 'Staff Meeting',
+        startAt: new Date(base.getTime() + 1 * 60 * 60 * 1000),
+        endAt: new Date(base.getTime() + 2 * 60 * 60 * 1000),
+        row: 0,
+        tone: 'primary' as const,
+      },
+      {
+        id: 'sch_2',
+        title: 'Training Session',
+        startAt: new Date(base.getTime() + 2 * 60 * 60 * 1000),
+        endAt: new Date(base.getTime() + 4 * 60 * 60 * 1000),
+        row: 1,
+        tone: 'soft' as const,
+      },
+      {
+        id: 'sch_3',
+        title: 'Client Sync',
+        startAt: new Date(base.getTime() + 4 * 60 * 60 * 1000),
+        endAt: new Date(base.getTime() + 5 * 60 * 60 * 1000),
+        row: 2,
+        tone: 'muted' as const,
+      },
+      {
+        id: 'sch_4',
+        title: 'Interview Review',
+        startAt: new Date(base.getTime() + 6 * 60 * 60 * 1000),
+        endAt: new Date(base.getTime() + 7 * 60 * 60 * 1000),
+        row: 0,
+        tone: 'primary' as const,
+      },
+      {
+        id: 'sch_5',
+        title: 'Planning Call',
+        startAt: new Date(base.getTime() + 8 * 60 * 60 * 1000),
+        endAt: new Date(base.getTime() + 10 * 60 * 60 * 1000),
+        row: 1,
+        tone: 'soft' as const,
+      },
+    ];
+  }, []);
+  const scheduleVisibleEvents = useMemo(() => {
+    const windowStartMs = scheduleWindowStart.getTime();
+    const windowEndMs = scheduleWindowEnd.getTime();
+    const totalMinutes = hoursPerPage * 60;
+    return scheduleDummyEvents
+      .filter((event) => event.endAt.getTime() > windowStartMs && event.startAt.getTime() < windowEndMs)
+      .map((event) => {
+        const startMs = Math.max(event.startAt.getTime(), windowStartMs);
+        const endMs = Math.min(event.endAt.getTime(), windowEndMs);
+        const left = ((startMs - windowStartMs) / 60000 / totalMinutes) * 100;
+        const width = Math.max(((endMs - startMs) / 60000 / totalMinutes) * 100, 12);
+        return {
+          ...event,
+          left,
+          width,
+        };
+      });
+  }, [hoursPerPage, scheduleDummyEvents, scheduleWindowEnd, scheduleWindowStart]);
 
   async function openProjectHours(projectId: string, projectName: string) {
     try {
@@ -401,32 +530,86 @@ export default function HomePage() {
             <p>
               Date {attendanceSnapshot.date}: team size {attendanceSnapshot.total}
             </p>
-            <div className="attendance-bars">
-              {attendanceSnapshot.rows.map((row) => (
-                <div key={row.key} className="attendance-bar-row">
-                  <div className="attendance-bar-head">
-                    <span>{row.label}</span>
-                    <span>{row.value}</span>
-                  </div>
-                  <div className="attendance-bar-track">
-                    <div
-                      className={`attendance-bar-fill ${row.tone}`}
-                      style={{ width: `${(row.value / Math.max(attendanceSnapshot.total, 1)) * 100}%` }}
-                    />
+            <div className="attendance-snapshot-layout">
+              <div className="attendance-donut-col">
+                <div className="attendance-donut" style={attendanceDonutStyle}>
+                  <div className="attendance-donut-center">
+                    <strong>{attendanceSnapshot.total}</strong>
+                    <small>Team Members</small>
                   </div>
                 </div>
-              ))}
+              </div>
+              <div className="attendance-bars">
+                {attendanceSnapshot.rows.map((row) => (
+                  <div key={row.key} className="attendance-bar-row">
+                    <div className="attendance-bar-head">
+                      <span>{row.label}</span>
+                      <span>
+                        {Math.round((row.value / Math.max(attendanceSnapshot.total, 1)) * 100)}%
+                      </span>
+                    </div>
+                    <div className="attendance-bar-track">
+                      <div
+                        className={`attendance-bar-fill ${row.tone}`}
+                        style={{ width: `${(row.value / Math.max(attendanceSnapshot.total, 1)) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </article>
 
           <article className="card schedule-card">
-            <h2>Schedule</h2>
-            <p>Your meetings and team time-offs</p>
-            <ul>
-              {(overview?.schedule || []).map((item) => (
-                <li key={item.id}>{item.time} - {item.title}</li>
-              ))}
-            </ul>
+            <div className="schedule-head">
+              <div>
+                <h2>Events</h2>
+              </div>
+              <div className="schedule-nav">
+                <button
+                  type="button"
+                  onClick={() => setSchedulePage((prev) => Math.max(0, prev - 1))}
+                  disabled={schedulePage === 0}
+                  aria-label="Previous hours"
+                >
+                  <span aria-hidden="true">←</span>
+                </button>
+                <span className="schedule-range-label">{scheduleRangeLabel}</span>
+                <button type="button" onClick={() => setSchedulePage((prev) => prev + 1)} aria-label="Next hours">
+                  <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            </div>
+            <div className="schedule-timeline-scroll">
+              <div className="schedule-timeline-inner">
+                <div className="schedule-hours-row">
+                  {visibleHourTicks.map((tick) => (
+                    <span key={tick.toISOString()}>
+                      {tick.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).replace(' ', '')}
+                    </span>
+                  ))}
+                </div>
+                <div className="schedule-timeline-body">
+                  {visibleHourTicks.map((tick) => (
+                    <span key={tick.toISOString()} className="schedule-hour-guide" />
+                  ))}
+                  {scheduleVisibleEvents.map((event) => (
+                    <div
+                      key={event.id}
+                      className={`schedule-event-pill ${event.tone}`}
+                      style={{
+                        left: `${event.left}%`,
+                        width: `${event.width}%`,
+                        top: `${18 + event.row * 58}px`,
+                      }}
+                    >
+                      {event.title}
+                    </div>
+                  ))}
+                  {scheduleVisibleEvents.length === 0 && <small className="schedule-empty">No meetings in this hour range.</small>}
+                </div>
+              </div>
+            </div>
           </article>
         </section>
 
