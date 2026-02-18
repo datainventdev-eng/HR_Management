@@ -165,6 +165,67 @@ export class CoreHrService implements OnModuleInit {
     }));
   }
 
+  async updateCustomer(ctx: RequestContext, id: string, payload: { name: string; description?: string }) {
+    this.assertHrAdmin(ctx);
+    const name = payload.name?.trim();
+    if (!name) {
+      throw new BadRequestException('Customer name is required.');
+    }
+
+    const existing = await this.db.query<{ id: string }>(`SELECT id FROM core_customers WHERE id = $1 LIMIT 1`, [id]);
+    if (!existing.rows[0]) {
+      throw new NotFoundException('Customer not found.');
+    }
+
+    await this.db.query(`UPDATE core_customers SET name = $2, description = $3 WHERE id = $1`, [
+      id,
+      name,
+      payload.description?.trim() || null,
+    ]);
+
+    await this.opsService.addAudit({
+      actorId: ctx.employeeId || 'hr_admin',
+      action: 'customer.updated',
+      entity: 'customer',
+      entityId: id,
+      metadata: { name, description: payload.description || '' },
+    });
+
+    return {
+      id,
+      name,
+      description: payload.description?.trim() || undefined,
+    };
+  }
+
+  async deleteCustomer(ctx: RequestContext, id: string) {
+    this.assertHrAdmin(ctx);
+    const existing = await this.db.query<{ id: string }>(`SELECT id FROM core_customers WHERE id = $1 LIMIT 1`, [id]);
+    if (!existing.rows[0]) {
+      throw new NotFoundException('Customer not found.');
+    }
+
+    const projects = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM core_projects WHERE customer_id = $1`,
+      [id],
+    );
+    if (Number(projects.rows[0]?.count || '0') > 0) {
+      throw new BadRequestException('Cannot delete customer with existing projects.');
+    }
+
+    await this.db.query(`DELETE FROM core_customers WHERE id = $1`, [id]);
+
+    await this.opsService.addAudit({
+      actorId: ctx.employeeId || 'hr_admin',
+      action: 'customer.deleted',
+      entity: 'customer',
+      entityId: id,
+      metadata: {},
+    });
+
+    return { success: true };
+  }
+
   async createProject(ctx: RequestContext, payload: { customerId: string; name: string; description?: string }) {
     this.assertHrAdmin(ctx);
     const customerId = payload.customerId?.trim();
@@ -201,6 +262,66 @@ export class CoreHrService implements OnModuleInit {
     });
 
     return project;
+  }
+
+  async updateProject(ctx: RequestContext, id: string, payload: { customerId: string; name: string; description?: string }) {
+    this.assertHrAdmin(ctx);
+    const name = payload.name?.trim();
+    if (!name) {
+      throw new BadRequestException('Project name is required.');
+    }
+    const customerId = payload.customerId?.trim();
+    if (!customerId) {
+      throw new BadRequestException('Customer is required.');
+    }
+    await this.ensureCustomerExists(customerId);
+
+    const existing = await this.db.query<{ id: string }>(`SELECT id FROM core_projects WHERE id = $1 LIMIT 1`, [id]);
+    if (!existing.rows[0]) {
+      throw new NotFoundException('Project not found.');
+    }
+
+    await this.db.query(`UPDATE core_projects SET customer_id = $2, name = $3, description = $4 WHERE id = $1`, [
+      id,
+      customerId,
+      name,
+      payload.description?.trim() || null,
+    ]);
+
+    await this.opsService.addAudit({
+      actorId: ctx.employeeId || 'hr_admin',
+      action: 'project.updated',
+      entity: 'project',
+      entityId: id,
+      metadata: { customerId, name },
+    });
+
+    return {
+      id,
+      customerId,
+      name,
+      description: payload.description?.trim() || undefined,
+    };
+  }
+
+  async deleteProject(ctx: RequestContext, id: string) {
+    this.assertHrAdmin(ctx);
+    const existing = await this.db.query<{ id: string }>(`SELECT id FROM core_projects WHERE id = $1 LIMIT 1`, [id]);
+    if (!existing.rows[0]) {
+      throw new NotFoundException('Project not found.');
+    }
+
+    await this.db.query(`DELETE FROM core_projects WHERE id = $1`, [id]);
+
+    await this.opsService.addAudit({
+      actorId: ctx.employeeId || 'hr_admin',
+      action: 'project.deleted',
+      entity: 'project',
+      entityId: id,
+      metadata: {},
+    });
+
+    return { success: true };
   }
 
   async listProjects() {
@@ -375,6 +496,34 @@ export class CoreHrService implements OnModuleInit {
     });
 
     return this.mapEmployee({ ...employee, ...this.toDbEmployeePartial(next), id });
+  }
+
+  async deleteEmployee(ctx: RequestContext, id: string) {
+    this.assertHrAdmin(ctx);
+    const existing = await this.db.query<DbEmployee>(`SELECT * FROM core_employees WHERE id = $1 LIMIT 1`, [id]);
+    if (!existing.rows[0]) {
+      throw new NotFoundException('Employee not found.');
+    }
+
+    await this.db.query(`UPDATE core_employees SET manager_id = NULL, updated_at = NOW() WHERE manager_id = $1`, [id]);
+    await this.db.query(`DELETE FROM core_lifecycle_events WHERE employee_id = $1`, [id]);
+
+    const usersTable = await this.tableExists('app_users');
+    if (usersTable) {
+      await this.db.query(`UPDATE app_users SET employee_id = NULL, updated_at = NOW() WHERE employee_id = $1`, [id]);
+    }
+
+    await this.db.query(`DELETE FROM core_employees WHERE id = $1`, [id]);
+
+    await this.opsService.addAudit({
+      actorId: ctx.employeeId || 'hr_admin',
+      action: 'employee.deleted',
+      entity: 'employee',
+      entityId: id,
+      metadata: { employeeCode: existing.rows[0].employee_id },
+    });
+
+    return { success: true };
   }
 
   async listEmployees(ctx: RequestContext) {
@@ -658,6 +807,11 @@ export class CoreHrService implements OnModuleInit {
     if (!result.rows[0]) {
       throw new BadRequestException('Customer does not exist.');
     }
+  }
+
+  private async tableExists(table: string) {
+    const result = await this.db.query<{ exists: boolean }>(`SELECT to_regclass($1) IS NOT NULL AS exists`, [`public.${table}`]);
+    return Boolean(result.rows[0]?.exists);
   }
 
   private assertHrAdmin(ctx: RequestContext) {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Patch, Post } from '@nestjs/common';
 import { CoreHrService } from './core-hr.service';
 import { UserRole } from './core-hr.types';
 
@@ -31,6 +31,20 @@ export class CoreHrController {
     return this.coreHrService.createCustomer(this.ctx(headers), body);
   }
 
+  @Patch('customers/:id')
+  updateCustomer(
+    @Headers() headers: Record<string, string>,
+    @Param('id') id: string,
+    @Body() body: { name: string; description?: string },
+  ) {
+    return this.coreHrService.updateCustomer(this.ctx(headers), id, body);
+  }
+
+  @Delete('customers/:id')
+  deleteCustomer(@Headers() headers: Record<string, string>, @Param('id') id: string) {
+    return this.coreHrService.deleteCustomer(this.ctx(headers), id);
+  }
+
   @Get('projects')
   listProjects() {
     return this.coreHrService.listProjects();
@@ -39,6 +53,20 @@ export class CoreHrController {
   @Post('projects')
   createProject(@Headers() headers: Record<string, string>, @Body() body: { customerId: string; name: string; description?: string }) {
     return this.coreHrService.createProject(this.ctx(headers), body);
+  }
+
+  @Patch('projects/:id')
+  updateProject(
+    @Headers() headers: Record<string, string>,
+    @Param('id') id: string,
+    @Body() body: { customerId: string; name: string; description?: string },
+  ) {
+    return this.coreHrService.updateProject(this.ctx(headers), id, body);
+  }
+
+  @Delete('projects/:id')
+  deleteProject(@Headers() headers: Record<string, string>, @Param('id') id: string) {
+    return this.coreHrService.deleteProject(this.ctx(headers), id);
   }
 
   @Get('employees')
@@ -54,6 +82,11 @@ export class CoreHrController {
   @Patch('employees/:id')
   updateEmployee(@Headers() headers: Record<string, string>, @Param('id') id: string, @Body() body: any) {
     return this.coreHrService.updateEmployee(this.ctx(headers), id, body);
+  }
+
+  @Delete('employees/:id')
+  deleteEmployee(@Headers() headers: Record<string, string>, @Param('id') id: string) {
+    return this.coreHrService.deleteEmployee(this.ctx(headers), id);
   }
 
   @Get('managers/:managerId/reports')

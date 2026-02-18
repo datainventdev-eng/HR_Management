@@ -85,6 +85,8 @@ export class LeaveService implements OnModuleInit {
       leaveType.paid,
       leaveType.annualLimit ?? null,
     ]);
+
+    await this.autoAllocateLeaveTypeToAllEmployees(leaveType.id, leaveType.annualLimit ?? 0);
     return leaveType;
   }
 
@@ -98,6 +100,57 @@ export class LeaveService implements OnModuleInit {
       paid: row.paid,
       annualLimit: row.annual_limit ?? undefined,
     }));
+  }
+
+  async updateLeaveType(ctx: LeaveContext, id: string, payload: { name: string; paid: boolean; annualLimit?: number }) {
+    this.assertHrAdmin(ctx);
+    if (!payload.name?.trim()) {
+      throw new BadRequestException('Leave type name is required.');
+    }
+
+    const existing = await this.db.query<{ id: string }>(`SELECT id FROM leave_types WHERE id = $1 LIMIT 1`, [id]);
+    if (!existing.rows[0]) {
+      throw new NotFoundException('Leave type not found.');
+    }
+
+    await this.db.query(
+      `UPDATE leave_types SET name = $2, paid = $3, annual_limit = $4 WHERE id = $1`,
+      [id, payload.name.trim(), payload.paid, payload.annualLimit ?? null],
+    );
+
+    return {
+      id,
+      name: payload.name.trim(),
+      paid: payload.paid,
+      annualLimit: payload.annualLimit,
+    };
+  }
+
+  async deleteLeaveType(ctx: LeaveContext, id: string) {
+    this.assertHrAdmin(ctx);
+    const existing = await this.db.query<{ id: string }>(`SELECT id FROM leave_types WHERE id = $1 LIMIT 1`, [id]);
+    if (!existing.rows[0]) {
+      throw new NotFoundException('Leave type not found.');
+    }
+
+    const allocations = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM leave_allocations WHERE leave_type_id = $1`,
+      [id],
+    );
+    if (Number(allocations.rows[0]?.count ?? '0') > 0) {
+      throw new BadRequestException('Cannot delete leave type with existing allocations.');
+    }
+
+    const requests = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM leave_requests WHERE leave_type_id = $1`,
+      [id],
+    );
+    if (Number(requests.rows[0]?.count ?? '0') > 0) {
+      throw new BadRequestException('Cannot delete leave type with existing leave requests.');
+    }
+
+    await this.db.query(`DELETE FROM leave_types WHERE id = $1`, [id]);
+    return { success: true };
   }
 
   async setManagerMap(ctx: LeaveContext, payload: EmployeeManagerMap) {
@@ -178,8 +231,10 @@ export class LeaveService implements OnModuleInit {
       throw new BadRequestException('Leave date range is invalid.');
     }
 
-    const leaveTypeResult = await this.db.query<{ id: string; paid: boolean }>(
-      `SELECT id, paid FROM leave_types WHERE id = $1 LIMIT 1`,
+    await this.ensureEmployeeAutoAllocations(ctx.employeeId);
+
+    const leaveTypeResult = await this.db.query<{ id: string }>(
+      `SELECT id FROM leave_types WHERE id = $1 LIMIT 1`,
       [payload.leaveTypeId],
     );
     const leaveType = leaveTypeResult.rows[0];
@@ -192,9 +247,7 @@ export class LeaveService implements OnModuleInit {
       [ctx.employeeId],
     );
     const mapping = mappingResult.rows[0];
-    if (!mapping) {
-      throw new BadRequestException('Manager assignment is required before requesting leave.');
-    }
+    const managerId = mapping?.manager_id ?? 'unassigned';
 
     const days = this.diffDays(payload.startDate, payload.endDate);
     const allocationResult = await this.db.query<{ id: string; allocated: number; used: number }>(
@@ -203,20 +256,18 @@ export class LeaveService implements OnModuleInit {
     );
     const allocation = allocationResult.rows[0];
 
-    if (leaveType.paid) {
-      if (!allocation) {
-        throw new BadRequestException('Leave allocation is required before requesting paid leave.');
-      }
+    if (!allocation) {
+      throw new BadRequestException('Leave allocation is required before requesting leave.');
+    }
 
-      if (allocation.allocated - allocation.used < days) {
-        throw new BadRequestException('Insufficient leave balance for this request.');
-      }
+    if (allocation.allocated - allocation.used < days) {
+      throw new BadRequestException('Insufficient leave balance for this request.');
     }
 
     const request: LeaveRequest = {
       id: this.id('lr'),
       employeeId: ctx.employeeId,
-      managerId: mapping.manager_id,
+      managerId,
       leaveTypeId: payload.leaveTypeId,
       startDate: payload.startDate,
       endDate: payload.endDate,
@@ -246,12 +297,14 @@ export class LeaveService implements OnModuleInit {
       ],
     );
 
-    await this.opsService.addNotification({
-      userId: mapping.manager_id,
-      type: 'leave',
-      title: 'New leave request',
-      message: `Employee ${ctx.employeeId} submitted leave request ${request.id}.`,
-    });
+    if (managerId !== 'unassigned') {
+      await this.opsService.addNotification({
+        userId: managerId,
+        type: 'leave',
+        title: 'New leave request',
+        message: `Employee ${ctx.employeeId} submitted leave request ${request.id}.`,
+      });
+    }
     await this.opsService.addAudit({
       actorId: ctx.employeeId,
       action: 'leave.request.submitted',
@@ -263,9 +316,24 @@ export class LeaveService implements OnModuleInit {
   }
 
   async listRequests(ctx: LeaveContext, query?: { employeeId?: string; managerId?: string }) {
+    const requestSelect = `
+      SELECT id,
+             employee_id,
+             manager_id,
+             leave_type_id,
+             start_date::text AS start_date,
+             end_date::text AS end_date,
+             reason,
+             days,
+             status,
+             manager_comment,
+             created_at
+      FROM leave_requests
+    `;
+
     if (ctx.role === 'employee') {
       const result = await this.db.query<DbLeaveRequest>(
-        `SELECT * FROM leave_requests WHERE employee_id = $1 ORDER BY created_at DESC`,
+        `${requestSelect} WHERE employee_id = $1 ORDER BY created_at DESC`,
         [ctx.employeeId ?? ''],
       );
       return result.rows.map((row) => this.mapRequest(row));
@@ -276,7 +344,7 @@ export class LeaveService implements OnModuleInit {
         throw new UnauthorizedException('Manager context is missing.');
       }
       const result = await this.db.query<DbLeaveRequest>(
-        `SELECT * FROM leave_requests WHERE manager_id = $1 ORDER BY created_at DESC`,
+        `${requestSelect} WHERE manager_id = $1 ORDER BY created_at DESC`,
         [ctx.employeeId],
       );
       return result.rows.map((row) => this.mapRequest(row));
@@ -284,7 +352,7 @@ export class LeaveService implements OnModuleInit {
 
     if (query?.employeeId) {
       const result = await this.db.query<DbLeaveRequest>(
-        `SELECT * FROM leave_requests WHERE employee_id = $1 ORDER BY created_at DESC`,
+        `${requestSelect} WHERE employee_id = $1 ORDER BY created_at DESC`,
         [query.employeeId],
       );
       return result.rows.map((row) => this.mapRequest(row));
@@ -292,13 +360,13 @@ export class LeaveService implements OnModuleInit {
 
     if (query?.managerId) {
       const result = await this.db.query<DbLeaveRequest>(
-        `SELECT * FROM leave_requests WHERE manager_id = $1 ORDER BY created_at DESC`,
+        `${requestSelect} WHERE manager_id = $1 ORDER BY created_at DESC`,
         [query.managerId],
       );
       return result.rows.map((row) => this.mapRequest(row));
     }
 
-    const result = await this.db.query<DbLeaveRequest>(`SELECT * FROM leave_requests ORDER BY created_at DESC`);
+    const result = await this.db.query<DbLeaveRequest>(`${requestSelect} ORDER BY created_at DESC`);
     return result.rows.map((row) => this.mapRequest(row));
   }
 
@@ -310,17 +378,35 @@ export class LeaveService implements OnModuleInit {
       managerComment?: string;
     },
   ) {
-    if (ctx.role !== 'manager') {
-      throw new UnauthorizedException('Only managers can approve or reject leave requests.');
+    if (ctx.role !== 'manager' && ctx.role !== 'hr_admin') {
+      throw new UnauthorizedException('Only managers or HR Admin can approve or reject leave requests.');
     }
 
-    const result = await this.db.query<DbLeaveRequest>(`SELECT * FROM leave_requests WHERE id = $1 LIMIT 1`, [payload.requestId]);
+    const result = await this.db.query<DbLeaveRequest>(
+      `
+      SELECT id,
+             employee_id,
+             manager_id,
+             leave_type_id,
+             start_date::text AS start_date,
+             end_date::text AS end_date,
+             reason,
+             days,
+             status,
+             manager_comment,
+             created_at
+      FROM leave_requests
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [payload.requestId],
+    );
     const request = result.rows[0];
     if (!request) {
       throw new NotFoundException('Leave request not found.');
     }
 
-    if (request.manager_id !== ctx.employeeId) {
+    if (ctx.role === 'manager' && request.manager_id !== ctx.employeeId) {
       throw new UnauthorizedException('Manager can only approve direct-report leave requests.');
     }
 
@@ -377,6 +463,8 @@ export class LeaveService implements OnModuleInit {
     if (!targetEmployeeId) {
       throw new BadRequestException('Employee ID is required to view balances.');
     }
+
+    await this.ensureEmployeeAutoAllocations(targetEmployeeId);
 
     const result = await this.db.query<{
       id: string;
@@ -468,6 +556,55 @@ export class LeaveService implements OnModuleInit {
     }
   }
 
+  private async autoAllocateLeaveTypeToAllEmployees(leaveTypeId: string, annualLimit: number) {
+    if (!(await this.coreEmployeesTableExists())) {
+      return;
+    }
+
+    const employees = await this.db.query<{ id: string }>(`SELECT id FROM core_employees`);
+    for (const employee of employees.rows) {
+      await this.db.query(
+        `
+        INSERT INTO leave_allocations (id, employee_id, leave_type_id, allocated, used, updated_at)
+        VALUES ($1, $2, $3, $4, 0, NOW())
+        ON CONFLICT (employee_id, leave_type_id)
+        DO NOTHING
+        `,
+        [this.id('la'), employee.id, leaveTypeId, annualLimit],
+      );
+    }
+  }
+
+  private async ensureEmployeeAutoAllocations(employeeId: string) {
+    await this.db.query(
+      `
+      INSERT INTO leave_allocations (id, employee_id, leave_type_id, allocated, used, updated_at)
+      SELECT
+        'la_' || substr(md5(random()::text || clock_timestamp()::text || lt.id), 1, 8),
+        $1,
+        lt.id,
+        COALESCE(lt.annual_limit, 0),
+        0,
+        NOW()
+      FROM leave_types lt
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM leave_allocations la
+        WHERE la.employee_id = $1
+          AND la.leave_type_id = lt.id
+      )
+      `,
+      [employeeId],
+    );
+  }
+
+  private async coreEmployeesTableExists() {
+    const result = await this.db.query<{ exists: boolean }>(
+      `SELECT to_regclass('public.core_employees') IS NOT NULL AS exists`,
+    );
+    return Boolean(result.rows[0]?.exists);
+  }
+
   private diffDays(startDate: string, endDate: string) {
     const start = new Date(`${startDate}T00:00:00Z`).getTime();
     const end = new Date(`${endDate}T00:00:00Z`).getTime();
@@ -484,14 +621,24 @@ export class LeaveService implements OnModuleInit {
       employeeId: row.employee_id,
       managerId: row.manager_id,
       leaveTypeId: row.leave_type_id,
-      startDate: row.start_date,
-      endDate: row.end_date,
+      startDate: this.toDateOnly(row.start_date),
+      endDate: this.toDateOnly(row.end_date),
       reason: row.reason ?? undefined,
       days: row.days,
       status: row.status,
       managerComment: row.manager_comment ?? undefined,
-      createdAt: row.created_at,
+      createdAt: typeof row.created_at === 'string' ? row.created_at : row.created_at.toISOString(),
     };
+  }
+
+  private toDateOnly(value: string | Date) {
+    if (typeof value === 'string') {
+      return value.slice(0, 10);
+    }
+    const year = value.getUTCFullYear();
+    const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(value.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 }
 
@@ -500,11 +647,11 @@ interface DbLeaveRequest {
   employee_id: string;
   manager_id: string;
   leave_type_id: string;
-  start_date: string;
-  end_date: string;
+  start_date: string | Date;
+  end_date: string | Date;
   reason: string | null;
   days: number;
   status: 'Pending' | 'Approved' | 'Rejected';
   manager_comment: string | null;
-  created_at: string;
+  created_at: string | Date;
 }

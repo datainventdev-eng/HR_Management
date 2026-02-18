@@ -17,6 +17,17 @@ export default function EmployeeHomePage() {
   } | null>(null);
   const [actionLoading, setActionLoading] = useState<'check_in' | 'check_out' | null>(null);
   const [recordLoading, setRecordLoading] = useState(false);
+  const [timesheetLoading, setTimesheetLoading] = useState(false);
+  const [timesheetMonthTotal, setTimesheetMonthTotal] = useState('00:00');
+  const [hasTodayTimesheet, setHasTodayTimesheet] = useState(false);
+  const [leaveLoading, setLeaveLoading] = useState(false);
+  const [leaveSummary, setLeaveSummary] = useState<{
+    pending: number;
+    approved: number;
+    rejected: number;
+    lastStatus?: 'Pending' | 'Approved' | 'Rejected';
+    lastRange?: string;
+  }>({ pending: 0, approved: 0, rejected: 0 });
   const [now, setNow] = useState(new Date());
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -84,6 +95,110 @@ export default function EmployeeHomePage() {
     }
   }
 
+  async function refreshTimesheetStatus() {
+    if (!session) return;
+    try {
+      setTimesheetLoading(true);
+      const todayIso = localDateIso();
+      const weekStart = startOfWeek(new Date());
+      const dayKey = dayKeyFromDate(new Date());
+
+      const [summaryResponse, singleResponse, weeklyResponse] = await Promise.all([
+        fetch(`${apiBase}/timesheet/summary?weekStartDate=${weekStart}`, {
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            'x-role': 'employee',
+            'x-employee-id': session.user.employeeId || session.user.id,
+          },
+        }),
+        fetch(`${apiBase}/timesheet/single?date=${todayIso}`, {
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            'x-role': 'employee',
+            'x-employee-id': session.user.employeeId || session.user.id,
+          },
+        }),
+        fetch(`${apiBase}/timesheet/weekly-rows?weekStartDate=${weekStart}`, {
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+            'x-role': 'employee',
+            'x-employee-id': session.user.employeeId || session.user.id,
+          },
+        }),
+      ]);
+
+      const summaryPayload = await readPayload(summaryResponse);
+      const singlePayload = await readPayload(singleResponse);
+      const weeklyPayload = await readPayload(weeklyResponse);
+
+      if (!summaryResponse.ok) {
+        throw new Error(summaryPayload.message ?? 'Failed to load timesheet summary.');
+      }
+
+      const singleLogged = Array.isArray(singlePayload) && singlePayload.length > 0;
+      const weeklyLogged =
+        Array.isArray(weeklyPayload?.rows) &&
+        weeklyPayload.rows.some((row: any) => Number(row?.hours?.[dayKey] || 0) > 0);
+
+      setTimesheetMonthTotal(summaryPayload.thisMonthTotal || '00:00');
+      setHasTodayTimesheet(singleLogged || weeklyLogged);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to load timesheet status.');
+    } finally {
+      setTimesheetLoading(false);
+    }
+  }
+
+  function formatLeaveRange(startDate: string, endDate: string) {
+    const dateFormatter = new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+    const parseDate = (text: string) => {
+      const [yearText, monthText, dayText] = text.slice(0, 10).split('-');
+      return new Date(Date.UTC(Number(yearText), Number(monthText) - 1, Number(dayText)));
+    };
+    const start = parseDate(startDate);
+    const end = parseDate(endDate);
+    const startLabel = dateFormatter.format(start);
+    const endLabel = dateFormatter.format(end);
+    return startDate === endDate ? startLabel : `${startLabel} to ${endLabel}`;
+  }
+
+  async function refreshLeaveStatus() {
+    if (!session) return;
+    try {
+      setLeaveLoading(true);
+      const response = await fetch(`${apiBase}/leave/requests`, {
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+          'x-role': 'employee',
+          'x-employee-id': session.user.employeeId || session.user.id,
+        },
+      });
+      const payload = await readPayload(response);
+      if (!response.ok) throw new Error(payload.message ?? 'Failed to load leave status.');
+      const requests = Array.isArray(payload) ? payload : [];
+      const pending = requests.filter((item: any) => item.status === 'Pending').length;
+      const approved = requests.filter((item: any) => item.status === 'Approved').length;
+      const rejected = requests.filter((item: any) => item.status === 'Rejected').length;
+      const latest = requests[0];
+      setLeaveSummary({
+        pending,
+        approved,
+        rejected,
+        lastStatus: latest?.status,
+        lastRange: latest ? formatLeaveRange(latest.startDate, latest.endDate) : undefined,
+      });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to load leave status.');
+    } finally {
+      setLeaveLoading(false);
+    }
+  }
+
   async function markCheckIn() {
     if (!session) return;
     try {
@@ -107,6 +222,7 @@ export default function EmployeeHomePage() {
       }
       setMessage(`Checked in at ${payload.checkInTime}.`);
       await refreshTodayRecord();
+      await refreshTimesheetStatus();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Check-in failed.');
     } finally {
@@ -137,6 +253,7 @@ export default function EmployeeHomePage() {
       }
       setMessage(`Checked out at ${payload.checkOutTime}.`);
       await refreshTodayRecord();
+      await refreshTimesheetStatus();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Check-out failed.');
     } finally {
@@ -146,6 +263,8 @@ export default function EmployeeHomePage() {
 
   useEffect(() => {
     refreshTodayRecord();
+    refreshTimesheetStatus();
+    refreshLeaveStatus();
   }, []);
 
   useEffect(() => {
@@ -381,8 +500,56 @@ export default function EmployeeHomePage() {
               </small>
             </div>
           </article>
+
+          <article className={`card employee-timesheet-card ${hasCheckedIn && !hasTodayTimesheet ? 'needs-log' : ''}`}>
+            <h3>Timesheets</h3>
+            <p>total hours logged in this month</p>
+            <strong className="employee-timesheet-total">{timesheetMonthTotal}</strong>
+            <small className="employee-timesheet-note">
+              {timesheetLoading
+                ? 'Checking today timesheet...'
+                : hasCheckedIn && !hasTodayTimesheet
+                ? 'Reminder: You checked in today but have not logged timesheet yet.'
+                : 'Timesheet is up to date for today.'}
+            </small>
+            <button type="button" onClick={() => router.push('/timesheets')}>
+              Open Timesheets
+            </button>
+          </article>
+
+          <article className="card employee-leave-card">
+            <h3>Leave Status</h3>
+            <p>Your leave request summary</p>
+            <div className="employee-leave-stats">
+              <span className="pending">Pending: {leaveSummary.pending}</span>
+              <span className="approved">Approved: {leaveSummary.approved}</span>
+              <span className="rejected">Rejected: {leaveSummary.rejected}</span>
+            </div>
+            <small className="employee-leave-last">
+              {leaveLoading
+                ? 'Loading leave status...'
+                : leaveSummary.lastStatus
+                ? `Last request: ${leaveSummary.lastStatus} (${leaveSummary.lastRange})`
+                : 'No leave requests yet.'}
+            </small>
+            <button type="button" onClick={() => router.push('/leave-management')}>
+              Open Leave
+            </button>
+          </article>
         </aside>
       </main>
     </div>
   );
+}
+
+function startOfWeek(date: Date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  d.setDate(d.getDate() - day);
+  return d.toISOString().slice(0, 10);
+}
+
+function dayKeyFromDate(date: Date): 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' {
+  const keys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+  return keys[date.getDay()];
 }

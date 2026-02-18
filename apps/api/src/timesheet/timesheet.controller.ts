@@ -91,6 +91,17 @@ export class TimesheetController {
     return this.timesheetService.listTimesheets(this.ctx(headers), { employeeId, weekStartDate });
   }
 
+  @Get('report')
+  report(
+    @Headers() headers: Record<string, string>,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('groupBy') groupBy?: 'none' | 'customer' | 'project',
+    @Query('employeeId') employeeId?: string,
+  ) {
+    return this.timesheetService.report(this.ctx(headers), { from, to, groupBy, employeeId });
+  }
+
   @Post('decision')
   decide(
     @Headers() headers: Record<string, string>,

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query } from '@nestjs/common';
 import { LeaveService } from './leave.service';
 import { LeaveRole } from './leave.types';
 
@@ -19,6 +19,20 @@ export class LeaveController {
   @Post('types')
   createType(@Headers() headers: Record<string, string>, @Body() body: { name: string; paid: boolean; annualLimit?: number }) {
     return this.leaveService.createLeaveType(this.ctx(headers), body);
+  }
+
+  @Patch('types/:id')
+  updateType(
+    @Headers() headers: Record<string, string>,
+    @Param('id') id: string,
+    @Body() body: { name: string; paid: boolean; annualLimit?: number },
+  ) {
+    return this.leaveService.updateLeaveType(this.ctx(headers), id, body);
+  }
+
+  @Delete('types/:id')
+  deleteType(@Headers() headers: Record<string, string>, @Param('id') id: string) {
+    return this.leaveService.deleteLeaveType(this.ctx(headers), id);
   }
 
   @Post('manager-map')

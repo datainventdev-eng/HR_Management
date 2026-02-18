@@ -922,6 +922,115 @@ a:focus-visible {
   padding: 10px;
 }
 
+.text-danger {
+  color: #aa2f2f;
+  font-weight: 600;
+}
+
+.pending-orange-text {
+  margin-top: 8px;
+  color: #b45a0e;
+  font-weight: 700;
+}
+
+.pending-orange-list li {
+  border-color: #ffd7b2;
+  background: #fff6ed;
+  color: #a14e08;
+}
+
+.leave-status-banner {
+  margin-top: 8px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.leave-status-banner.approved {
+  color: #0f6a3a;
+  border-color: #bdebcf;
+  background: #eefdf4;
+}
+
+.leave-status-banner.rejected {
+  color: #9f2b2b;
+  border-color: #f4c2c2;
+  background: #fff1f1;
+}
+
+.leave-status-banner.pending {
+  color: #a14e08;
+  border-color: #ffd7b2;
+  background: #fff6ed;
+}
+
+.leave-status-banner.neutral {
+  color: #4d5868;
+  background: #f7f9fc;
+}
+
+.list-item-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.icon-actions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.icon-actions button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ffd2ae;
+  border-radius: 8px;
+  background: #fff7ef;
+  color: #9b4705;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.icon-actions button:hover {
+  background: #ffefdf;
+}
+
+.inline-edit-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 100px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.inline-edit-grid input,
+.inline-edit-grid select {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 10px;
+  min-height: 40px;
+}
+
+.inline-edit-stack {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.inline-edit-stack input,
+.inline-edit-stack select {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 10px;
+  min-height: 40px;
+}
+
 .core-hr-grid {
   display: grid;
   gap: 16px;
@@ -1075,6 +1184,80 @@ a:focus-visible {
   background: #f8fafc;
 }
 
+.timesheet-report-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.timesheet-report-filters label {
+  display: grid;
+  gap: 6px;
+}
+
+.timesheet-report-filters input[type="date"],
+.timesheet-report-filters select {
+  min-height: 42px;
+  height: 42px;
+}
+
+.timesheet-report-filters input[type="date"] {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.timesheet-report-filters button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff8f2;
+  color: #a54d06;
+  padding: 9px 12px;
+  cursor: pointer;
+  height: 42px;
+}
+
+.timesheet-report-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.timesheet-report-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 920px;
+  background: #fff;
+}
+
+.timesheet-report-table th,
+.timesheet-report-table td {
+  border-bottom: 1px solid #ebeff4;
+  padding: 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.timesheet-report-table thead th {
+  background: #fafbfd;
+  font-weight: 700;
+  color: #3f4857;
+}
+
+.timesheet-group-row td {
+  background: #fff8f1;
+  font-weight: 700;
+  color: #a65a0e;
+}
+
+.timesheet-total-row td,
+.timesheet-report-table tfoot td {
+  font-weight: 700;
+  color: #2f3744;
+  background: #fcfdff;
+}
+
 .employee-attendance-card {
   max-width: 520px;
   margin: 0 auto;
@@ -1122,6 +1305,80 @@ a:focus-visible {
 
 .employee-graph-card h3 {
   margin-bottom: 10px;
+}
+
+.employee-timesheet-card {
+  display: grid;
+  gap: 8px;
+}
+
+.employee-leave-card {
+  display: grid;
+  gap: 8px;
+}
+
+.employee-leave-stats {
+  display: grid;
+  gap: 6px;
+}
+
+.employee-leave-stats span {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.employee-leave-stats .pending {
+  color: #a14e08;
+}
+
+.employee-leave-stats .approved {
+  color: #0f6a3a;
+}
+
+.employee-leave-stats .rejected {
+  color: #9f2b2b;
+}
+
+.employee-leave-last {
+  color: #5f6874;
+}
+
+.employee-leave-card button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff8f2;
+  color: #ad5208;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.employee-timesheet-card.needs-log {
+  border-color: #ffc897;
+  background: #fff8f1;
+}
+
+.employee-timesheet-total {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.employee-timesheet-note {
+  color: #5f6874;
+}
+
+.employee-timesheet-card.needs-log .employee-timesheet-note {
+  color: #ad5a0c;
+  font-weight: 600;
+}
+
+.employee-timesheet-card button {
+  justify-self: start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff8f2;
+  color: #a54d06;
+  padding: 7px 10px;
+  cursor: pointer;
 }
 
 .employee-status-card {
@@ -1525,6 +1782,18 @@ a:focus-visible {
 
   .timesheet-total-grid,
   .timesheet-single-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-edit-stack {
+    grid-template-columns: 1fr;
+  }
+
+  .timesheet-report-filters {
     grid-template-columns: 1fr;
   }
 

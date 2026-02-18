@@ -7,6 +7,7 @@ import { getSession } from '../lib.session';
 
 type CatalogCustomer = { id: string; name: string };
 type CatalogProject = { id: string; customerId: string; name: string };
+type EmployeeOption = { id: string; fullName: string };
 
 type Summary = {
   weekStartDate: string;
@@ -25,6 +26,18 @@ type WeeklyRow = {
   hours: { sun: number; mon: number; tue: number; wed: number; thu: number; fri: number; sat: number };
 };
 
+type ReportRow = {
+  activityDate: string;
+  customerId: string;
+  customerName: string;
+  projectId: string;
+  projectName: string;
+  notes: string;
+  billable: boolean;
+  durationMinutes: number;
+  duration: string;
+};
+
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 const DAYS: Array<keyof WeeklyRow['hours']> = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
@@ -34,11 +47,13 @@ export default function TimesheetsPage() {
   const role = session?.user.role ?? 'employee';
   const employeeId = session?.user.employeeId || session?.user.id || '';
 
-  const [view, setView] = useState<'home' | 'single' | 'weekly'>('home');
+  const [view, setView] = useState<'home' | 'single' | 'weekly' | 'report'>('home');
   const [message, setMessage] = useState('');
 
   const [customers, setCustomers] = useState<CatalogCustomer[]>([]);
   const [projects, setProjects] = useState<CatalogProject[]>([]);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(employeeId);
   const [summary, setSummary] = useState<Summary | null>(null);
 
   const [singleForm, setSingleForm] = useState({
@@ -55,6 +70,14 @@ export default function TimesheetsPage() {
   const [weeklyTotals, setWeeklyTotals] = useState<{ sun: number; mon: number; tue: number; wed: number; thu: number; fri: number; sat: number; total: number }>(
     { sun: 0, mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, total: 0 },
   );
+  const [reportForm, setReportForm] = useState({
+    from: startOfMonth(new Date()),
+    to: new Date().toISOString().slice(0, 10),
+    groupBy: 'none' as 'none' | 'customer' | 'project',
+  });
+  const [reportRows, setReportRows] = useState<ReportRow[]>([]);
+  const [reportTotalMinutes, setReportTotalMinutes] = useState(0);
+  const [reportLoading, setReportLoading] = useState(false);
 
   async function callApi(path: string, init?: RequestInit) {
     if (!session?.accessToken) {
@@ -79,7 +102,11 @@ export default function TimesheetsPage() {
     try {
       const [catalogPayload, summaryPayload] = await Promise.all([
         callApi('/timesheet/catalog'),
-        callApi(`/timesheet/summary?weekStartDate=${weekStartDate}`),
+        callApi(
+          `/timesheet/summary?weekStartDate=${weekStartDate}${
+            role === 'hr_admin' && selectedEmployeeId ? `&employeeId=${selectedEmployeeId}` : ''
+          }`,
+        ),
       ]);
       setCustomers(catalogPayload.customers || []);
       setProjects(catalogPayload.projects || []);
@@ -91,11 +118,33 @@ export default function TimesheetsPage() {
 
   async function loadWeeklyRows(date = weekStartDate) {
     try {
-      const payload = await callApi(`/timesheet/weekly-rows?weekStartDate=${date}`);
+      const payload = await callApi(
+        `/timesheet/weekly-rows?weekStartDate=${date}${
+          role === 'hr_admin' && selectedEmployeeId ? `&employeeId=${selectedEmployeeId}` : ''
+        }`,
+      );
       setWeeklyRows((payload.rows?.length ? payload.rows : [emptyWeeklyRow()]) as WeeklyRow[]);
       setWeeklyTotals(payload.totals || { sun: 0, mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, total: 0 });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to load weekly rows.');
+    }
+  }
+
+  async function runReport() {
+    try {
+      setReportLoading(true);
+      const payload = await callApi(
+        `/timesheet/report?from=${reportForm.from}&to=${reportForm.to}&groupBy=${reportForm.groupBy}${
+          role === 'hr_admin' && selectedEmployeeId ? `&employeeId=${selectedEmployeeId}` : ''
+        }`,
+      );
+      setReportRows(payload.rows || []);
+      setReportTotalMinutes(Number(payload.totalMinutes || 0));
+      setMessage('Timesheet report updated.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to run report.');
+    } finally {
+      setReportLoading(false);
     }
   }
 
@@ -169,13 +218,63 @@ export default function TimesheetsPage() {
 
   useEffect(() => {
     refreshBase();
-  }, [weekStartDate]);
+  }, [weekStartDate, selectedEmployeeId]);
 
   useEffect(() => {
     if (view === 'weekly') {
       loadWeeklyRows();
     }
-  }, [view, weekStartDate]);
+  }, [view, weekStartDate, selectedEmployeeId]);
+
+  useEffect(() => {
+    if (view === 'report') {
+      runReport();
+    }
+  }, [view, selectedEmployeeId]);
+
+  useEffect(() => {
+    if (role !== 'hr_admin') return;
+    async function loadEmployees() {
+      try {
+        const payload = await callApi('/core-hr/employees');
+        const mapped = (payload || []).map((row: any) => ({ id: row.id, fullName: row.fullName }));
+        setEmployees(mapped);
+        const preferredEmployeeId = session?.user.employeeId || '';
+        const hasPreferred = mapped.some((emp: EmployeeOption) => emp.id === preferredEmployeeId);
+        const hasCurrent = mapped.some((emp: EmployeeOption) => emp.id === selectedEmployeeId);
+        if ((!selectedEmployeeId || !hasCurrent) && hasPreferred) {
+          setSelectedEmployeeId(preferredEmployeeId);
+          return;
+        }
+        if ((!selectedEmployeeId || !hasCurrent) && mapped.length > 0) {
+          setSelectedEmployeeId(mapped[0].id);
+        }
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'Failed to load employees.');
+      }
+    }
+    loadEmployees();
+  }, [role]);
+
+  const groupedReport = useMemo(() => {
+    if (reportForm.groupBy === 'none') {
+      return [{ key: 'all', label: '', rows: reportRows }];
+    }
+    if (reportForm.groupBy === 'customer') {
+      const map = new Map<string, ReportRow[]>();
+      reportRows.forEach((row) => {
+        const key = row.customerName || 'Unknown Customer';
+        map.set(key, [...(map.get(key) || []), row]);
+      });
+      return Array.from(map.entries()).map(([label, rows]) => ({ key: label, label, rows }));
+    }
+    const map = new Map<string, ReportRow[]>();
+    reportRows.forEach((row) => {
+      const key = row.projectName || 'Unknown Project';
+      map.set(key, [...(map.get(key) || []), row]);
+    });
+    return Array.from(map.entries()).map(([label, rows]) => ({ key: label, label, rows }));
+  }, [reportForm.groupBy, reportRows]);
 
   return (
     <main className="timesheet-page">
@@ -218,6 +317,16 @@ export default function TimesheetsPage() {
             </div>
             <button type="button" onClick={() => setView('single')}>
               Single activity
+            </button>
+          </div>
+
+          <div className="timesheet-option">
+            <div>
+              <h3>View Report</h3>
+              <p>Review detailed logs by date range and grouping.</p>
+            </div>
+            <button type="button" onClick={() => setView('report')}>
+              View report
             </button>
           </div>
         </section>
@@ -427,6 +536,126 @@ export default function TimesheetsPage() {
           </form>
         </section>
       )}
+
+      {view === 'report' && (
+        <section className="card">
+          <div className="timesheet-topline">
+            <h2>Time Activities Report</h2>
+            <button type="button" onClick={() => setView('home')}>
+              Back
+            </button>
+          </div>
+
+          <div className="timesheet-report-filters">
+            <label>
+              From
+              <input
+                type="date"
+                value={reportForm.from}
+                onChange={(event) => setReportForm((prev) => ({ ...prev, from: event.target.value }))}
+              />
+            </label>
+            <label>
+              To
+              <input
+                type="date"
+                value={reportForm.to}
+                onChange={(event) => setReportForm((prev) => ({ ...prev, to: event.target.value }))}
+              />
+            </label>
+            <label>
+              Group by
+              <select
+                value={reportForm.groupBy}
+                onChange={(event) =>
+                  setReportForm((prev) => ({ ...prev, groupBy: event.target.value as 'none' | 'customer' | 'project' }))
+                }
+              >
+                <option value="none">None</option>
+                <option value="customer">Customer</option>
+                <option value="project">Project</option>
+              </select>
+            </label>
+            {role === 'hr_admin' && (
+              <label>
+                Employee
+                <select value={selectedEmployeeId} onChange={(event) => setSelectedEmployeeId(event.target.value)}>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.fullName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button type="button" onClick={runReport} disabled={reportLoading}>
+              {reportLoading ? 'Running...' : 'Run report'}
+            </button>
+          </div>
+
+          <div className="timesheet-report-table-wrap">
+            <table className="timesheet-report-table">
+              <thead>
+                <tr>
+                  <th>Activity Date</th>
+                  <th>Customer</th>
+                  <th>Product/Service</th>
+                  <th>Memo/Description</th>
+                  <th>Duration</th>
+                  <th>Billable</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groupedReport.flatMap((group) => {
+                  const rows = [];
+                  if (group.label) {
+                    rows.push(
+                      <tr key={`group-${group.key}`} className="timesheet-group-row">
+                        <td colSpan={6}>{group.label}</td>
+                      </tr>,
+                    );
+                  }
+                  group.rows.forEach((row, index) => {
+                    rows.push(
+                      <tr key={`${group.key}-${index}`}>
+                        <td>{formatDateShort(row.activityDate)}</td>
+                        <td>{row.customerName}</td>
+                        <td>{row.projectName}</td>
+                        <td>{row.notes || '-'}</td>
+                        <td>{row.duration}</td>
+                        <td>{row.billable ? 'Yes' : 'No'}</td>
+                      </tr>,
+                    );
+                  });
+                  if (group.label) {
+                    const total = group.rows.reduce((sum, row) => sum + row.durationMinutes, 0);
+                    rows.push(
+                      <tr key={`total-${group.key}`} className="timesheet-total-row">
+                        <td colSpan={4}>Total for {group.label}</td>
+                        <td>{minutesToDuration(total)}</td>
+                        <td />
+                      </tr>,
+                    );
+                  }
+                  return rows;
+                })}
+                {reportRows.length === 0 && (
+                  <tr>
+                    <td colSpan={6}>No timesheet entries found for selected range.</td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={4}>Grand Total</td>
+                  <td>{minutesToDuration(reportTotalMinutes)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </section>
+      )}
     </main>
   );
 }
@@ -449,6 +678,11 @@ function startOfWeek(date: Date) {
   return d.toISOString().slice(0, 10);
 }
 
+function startOfMonth(date: Date) {
+  const d = new Date(date.getFullYear(), date.getMonth(), 1);
+  return d.toISOString().slice(0, 10);
+}
+
 function shiftDate(dateIso: string, days: number) {
   const d = new Date(`${dateIso}T00:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -458,6 +692,13 @@ function shiftDate(dateIso: string, days: number) {
 function formatDateShort(dateIso: string) {
   const d = new Date(`${dateIso}T00:00:00.000Z`);
   return d.toLocaleDateString('en-GB');
+}
+
+function minutesToDuration(totalMinutes: number) {
+  const safe = Math.max(0, Math.round(totalMinutes));
+  const h = Math.floor(safe / 60);
+  const m = safe % 60;
+  return `${h}:${String(m).padStart(2, '0')}`;
 }
 
 function normalizeDuration(input: string) {

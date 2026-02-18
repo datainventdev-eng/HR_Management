@@ -566,6 +566,121 @@ export class TimesheetService implements OnModuleInit {
     return Promise.all(result.rows.map((row) => this.getTimesheetById(row.id)));
   }
 
+  async report(
+    ctx: TimesheetContext,
+    payload: { from: string; to: string; groupBy?: 'none' | 'customer' | 'project'; employeeId?: string },
+  ) {
+    const employeeId = this.resolveEmployeeId(ctx, payload.employeeId);
+    const from = payload.from;
+    const to = payload.to;
+    if (!from || !to) {
+      throw new BadRequestException('from and to dates are required.');
+    }
+    if (to < from) {
+      throw new BadRequestException('Invalid date range.');
+    }
+
+    const groupBy = payload.groupBy ?? 'none';
+    if (!['none', 'customer', 'project'].includes(groupBy)) {
+      throw new BadRequestException('groupBy must be one of: none, customer, project.');
+    }
+
+    const result = await this.db.query<{
+      activity_date: string;
+      customer_id: string;
+      customer_name: string | null;
+      project_id: string;
+      project_name: string | null;
+      notes: string | null;
+      billable: boolean;
+      duration_minutes: string;
+    }>(
+      `
+      WITH single_rows AS (
+        SELECT
+          s.start_date AS activity_date,
+          s.customer_id,
+          s.project_id,
+          s.notes,
+          s.billable,
+          s.duration_minutes::int AS duration_minutes
+        FROM timesheet_single_entries s
+        WHERE s.employee_id = $1
+          AND s.start_date >= $2::date
+          AND s.start_date <= $3::date
+      ),
+      weekly_rows AS (
+        SELECT
+          (w.week_start_date + v.day_offset)::date AS activity_date,
+          w.customer_id,
+          w.project_id,
+          w.notes,
+          w.billable,
+          (v.hours * 60)::int AS duration_minutes
+        FROM timesheet_weekly_rows w
+        JOIN LATERAL (
+          VALUES
+            (0, w.sun_hours),
+            (1, w.mon_hours),
+            (2, w.tue_hours),
+            (3, w.wed_hours),
+            (4, w.thu_hours),
+            (5, w.fri_hours),
+            (6, w.sat_hours)
+        ) AS v(day_offset, hours) ON TRUE
+        WHERE w.employee_id = $1
+          AND (w.week_start_date + v.day_offset) >= $2::date
+          AND (w.week_start_date + v.day_offset) <= $3::date
+          AND v.hours > 0
+      ),
+      merged AS (
+        SELECT * FROM single_rows
+        UNION ALL
+        SELECT * FROM weekly_rows
+      )
+      SELECT
+        m.activity_date::text AS activity_date,
+        m.customer_id,
+        c.name AS customer_name,
+        m.project_id,
+        p.name AS project_name,
+        m.notes,
+        m.billable,
+        m.duration_minutes::text AS duration_minutes
+      FROM merged m
+      LEFT JOIN core_customers c ON c.id = m.customer_id
+      LEFT JOIN core_projects p ON p.id = m.project_id
+      ORDER BY m.activity_date ASC, c.name ASC NULLS LAST, p.name ASC NULLS LAST
+      `,
+      [employeeId, from, to],
+    );
+
+    const rows = result.rows.map((row) => {
+      const minutes = Number(row.duration_minutes || '0');
+      const duration = `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+      return {
+        activityDate: row.activity_date,
+        customerId: row.customer_id,
+        customerName: row.customer_name ?? 'Unknown Customer',
+        projectId: row.project_id,
+        projectName: row.project_name ?? 'Unknown Project',
+        notes: row.notes ?? '',
+        billable: row.billable,
+        durationMinutes: minutes,
+        duration,
+      };
+    });
+
+    return {
+      employeeId,
+      from,
+      to,
+      groupBy,
+      rows,
+      totalMinutes: rows.reduce((sum, row) => sum + row.durationMinutes, 0),
+    };
+  }
+
   async decideTimesheet(
     ctx: TimesheetContext,
     payload: {
