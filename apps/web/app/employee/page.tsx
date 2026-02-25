@@ -20,6 +20,9 @@ export default function EmployeeHomePage() {
   const [timesheetLoading, setTimesheetLoading] = useState(false);
   const [timesheetMonthTotal, setTimesheetMonthTotal] = useState('00:00');
   const [hasTodayTimesheet, setHasTodayTimesheet] = useState(false);
+  const [monthlyAttendance, setMonthlyAttendance] = useState<
+    Array<{ date: string; checkInTime?: string; checkOutTime?: string; totalHours?: number; isLate: boolean; leftEarly: boolean }>
+  >([]);
   const [leaveLoading, setLeaveLoading] = useState(false);
   const [leaveSummary, setLeaveSummary] = useState<{
     pending: number;
@@ -28,6 +31,15 @@ export default function EmployeeHomePage() {
     lastStatus?: 'Pending' | 'Approved' | 'Rejected';
     lastRange?: string;
   }>({ pending: 0, approved: 0, rejected: 0 });
+  const [wfhLoading, setWfhLoading] = useState(false);
+  const [wfhSummary, setWfhSummary] = useState<{
+    pending: number;
+    approved: number;
+    rejected: number;
+    approvedThisMonth: number;
+    recentApprovedRange?: string;
+  }>({ pending: 0, approved: 0, rejected: 0, approvedThisMonth: 0 });
+  const [wfhRequests, setWfhRequests] = useState<Array<{ startDate: string; endDate: string; status: 'Pending' | 'Approved' | 'Rejected' }>>([]);
   const [now, setNow] = useState(new Date());
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -149,6 +161,24 @@ export default function EmployeeHomePage() {
     }
   }
 
+  async function refreshMonthlyAttendance() {
+    if (!session) return;
+    try {
+      const response = await fetch(`${apiBase}/attendance/monthly?month=${selectedMonthKey}`, {
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+          'x-role': 'employee',
+          'x-employee-id': session.user.employeeId || session.user.id,
+        },
+      });
+      const payload = await readPayload(response);
+      if (!response.ok) throw new Error(payload.message ?? 'Failed to load monthly attendance.');
+      setMonthlyAttendance(Array.isArray(payload) ? payload : []);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to load monthly attendance.');
+    }
+  }
+
   function formatLeaveRange(startDate: string, endDate: string) {
     const dateFormatter = new Intl.DateTimeFormat('en-GB', {
       day: '2-digit',
@@ -181,6 +211,7 @@ export default function EmployeeHomePage() {
       const payload = await readPayload(response);
       if (!response.ok) throw new Error(payload.message ?? 'Failed to load leave status.');
       const requests = Array.isArray(payload) ? payload : [];
+      setWfhRequests(requests);
       const pending = requests.filter((item: any) => item.status === 'Pending').length;
       const approved = requests.filter((item: any) => item.status === 'Approved').length;
       const rejected = requests.filter((item: any) => item.status === 'Rejected').length;
@@ -196,6 +227,43 @@ export default function EmployeeHomePage() {
       setMessage(error instanceof Error ? error.message : 'Failed to load leave status.');
     } finally {
       setLeaveLoading(false);
+    }
+  }
+
+  async function refreshWfhStatus() {
+    if (!session) return;
+    try {
+      setWfhLoading(true);
+      const response = await fetch(`${apiBase}/wfh/requests`, {
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+          'x-role': 'employee',
+          'x-employee-id': session.user.employeeId || session.user.id,
+        },
+      });
+      const payload = await readPayload(response);
+      if (!response.ok) throw new Error(payload.message ?? 'Failed to load WFH status.');
+      const requests = Array.isArray(payload) ? payload : [];
+      const pending = requests.filter((item: any) => item.status === 'Pending').length;
+      const approved = requests.filter((item: any) => item.status === 'Approved').length;
+      const rejected = requests.filter((item: any) => item.status === 'Rejected').length;
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const approvedThisMonthRows = requests.filter(
+        (item: any) => item.status === 'Approved' && String(item.startDate || '').slice(0, 7) === currentMonth,
+      );
+      const recentApproved = approvedThisMonthRows[0];
+
+      setWfhSummary({
+        pending,
+        approved,
+        rejected,
+        approvedThisMonth: approvedThisMonthRows.length,
+        recentApprovedRange: recentApproved ? formatLeaveRange(recentApproved.startDate, recentApproved.endDate) : undefined,
+      });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to load WFH status.');
+    } finally {
+      setWfhLoading(false);
     }
   }
 
@@ -265,7 +333,13 @@ export default function EmployeeHomePage() {
     refreshTodayRecord();
     refreshTimesheetStatus();
     refreshLeaveStatus();
+    refreshWfhStatus();
+    refreshMonthlyAttendance();
   }, []);
+
+  useEffect(() => {
+    refreshMonthlyAttendance();
+  }, [selectedMonthKey]);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
@@ -296,12 +370,25 @@ export default function EmployeeHomePage() {
   const daysInMonth = new Date(nowMonthDate.getFullYear(), nowMonthDate.getMonth() + 1, 0).getDate();
   const firstWeekday = firstDay.getDay();
 
-  type DayStatus = 'full' | 'partial' | 'late' | 'absent';
+  type DayStatus = 'full' | 'partial' | 'late' | 'absent' | 'wfh';
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const attendanceByDate = monthlyAttendance.reduce(
+    (acc, item) => {
+      acc[item.date.slice(0, 10)] = item;
+      return acc;
+    },
+    {} as Record<string, { date: string; checkInTime?: string; checkOutTime?: string; totalHours?: number; isLate: boolean; leftEarly: boolean }>,
+  );
+
+  const approvedWfhRanges = wfhRequests.filter((item) => item.status === 'Approved');
+  function hasApprovedWfhOnDate(dateIso: string) {
+    return approvedWfhRanges.some((request) => request.startDate <= dateIso && request.endDate >= dateIso);
+  }
+
   const monthStatuses: Array<{
     day: number;
-    status?: DayStatus;
+    statuses: DayStatus[];
     hours: number;
     isWeekend: boolean;
     isFuture: boolean;
@@ -313,33 +400,48 @@ export default function EmployeeHomePage() {
     const isWeekend = weekday === 0 || weekday === 6;
     const isFuture = date.getTime() > today.getTime();
     const isInactive = isWeekend || isFuture;
+    const dateIso = `${nowMonthDate.getFullYear()}-${String(nowMonthDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
     if (isInactive) {
-      return { day, hours: 0, isWeekend, isFuture, isInactive };
+      return { day, statuses: [], hours: 0, isWeekend, isFuture, isInactive };
     }
 
-    if (day % 9 === 0) return { day, status: 'absent', hours: 0, isWeekend, isFuture, isInactive };
-    if (day % 7 === 0) return { day, status: 'partial', hours: 5.5, isWeekend, isFuture, isInactive };
-    if (day % 5 === 0) return { day, status: 'late', hours: 8.1, isWeekend, isFuture, isInactive };
-    return { day, status: 'full', hours: 8.7, isWeekend, isFuture, isInactive };
+    const record = attendanceByDate[dateIso];
+    const statuses: DayStatus[] = [];
+    const wfh = hasApprovedWfhOnDate(dateIso);
+    if (wfh) statuses.push('wfh');
+
+    if (!record?.checkInTime) {
+      if (!wfh) statuses.push('absent');
+      return { day, statuses, hours: 0, isWeekend, isFuture, isInactive };
+    }
+
+    const hours = Number(record.totalHours || 0);
+    if (record.isLate) statuses.push('late');
+    if (hours > 0 && hours < 7) statuses.push('partial');
+    if (!record.isLate && !(hours > 0 && hours < 7)) statuses.push('full');
+
+    return { day, statuses, hours: Number(record.totalHours || 0), isWeekend, isFuture, isInactive };
   });
   const statusCounts = monthStatuses.reduce(
     (acc, item) => {
-      if (!item.status) return acc;
-      acc[item.status] += 1;
+      item.statuses.forEach((status) => {
+        acc[status] += 1;
+      });
       return acc;
     },
-    { full: 0, partial: 0, late: 0, absent: 0 },
+    { full: 0, partial: 0, late: 0, absent: 0, wfh: 0 },
   );
   const activeDay =
-    monthStatuses.find((item) => item.day === selectedDay && item.status) ||
-    monthStatuses.find((item) => item.status) ||
+    monthStatuses.find((item) => item.day === selectedDay && item.statuses.length > 0) ||
+    monthStatuses.find((item) => item.statuses.length > 0) ||
     monthStatuses[0];
   const statusLabel = {
     full: 'Fully Present',
     partial: 'Partial Present',
     late: 'Late',
     absent: 'Absent',
+    wfh: 'WFH',
   } as const;
   const monthOptions = Array.from({ length: 12 }, (_, index) => {
     const date = new Date(2026, index, 1);
@@ -348,6 +450,28 @@ export default function EmployeeHomePage() {
       label: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
     };
   });
+
+  const statusColor: Record<DayStatus, string> = {
+    full: '#30b25a',
+    partial: '#e55555',
+    late: '#ff8a2f',
+    absent: '#d4a72c',
+    wfh: '#6a5cff',
+  };
+
+  function buildDayBackground(statuses: DayStatus[]) {
+    if (!statuses.length) return '#fff';
+    if (statuses.length === 1) return statusColor[statuses[0]];
+    const step = 100 / statuses.length;
+    const segments = statuses
+      .map((status, index) => {
+        const start = (index * step).toFixed(2);
+        const end = ((index + 1) * step).toFixed(2);
+        return `${statusColor[status]} ${start}% ${end}%`;
+      })
+      .join(', ');
+    return `conic-gradient(${segments})`;
+  }
 
   return (
     <div className="employee-dashboard-shell">
@@ -425,8 +549,8 @@ export default function EmployeeHomePage() {
           <div className="quick-actions" style={{ marginTop: 14 }}>
             <button type="button" onClick={() => router.push('/timesheets')}>Timesheets</button>
             <button type="button" onClick={() => router.push('/leave-management')}>Leave</button>
-            <button type="button" onClick={() => router.push('/payroll')}>Payslips</button>
-            <button type="button" onClick={() => router.push('/attendance-time')}>Attendance Details</button>
+            <button type="button" onClick={() => router.push('/wfh')}>WFH Request</button>
+            <button type="button" onClick={() => router.push('/settings')}>Settings</button>
           </div>
         </section>
 
@@ -454,6 +578,7 @@ export default function EmployeeHomePage() {
               <span className="partial">Partial: {statusCounts.partial}</span>
               <span className="late">Late: {statusCounts.late}</span>
               <span className="absent">Absent: {statusCounts.absent}</span>
+              <span className="wfh">WFH: {statusCounts.wfh}</span>
             </div>
             <div className="employee-status-calendar">
               {Array.from({ length: firstWeekday }).map((_, index) => (
@@ -463,17 +588,28 @@ export default function EmployeeHomePage() {
                 <button
                   key={entry.day}
                   type="button"
-                  className={`calendar-day ${entry.status || ''} ${entry.isInactive ? 'inactive' : ''} ${activeDay?.day === entry.day ? 'active' : ''}`}
+                  className={`calendar-day ${entry.isInactive ? 'inactive' : ''} ${activeDay?.day === entry.day ? 'active' : ''}`}
                   onClick={() => {
                     if (entry.isInactive) return;
                     setSelectedDay(entry.day);
                   }}
+                  style={
+                    entry.isInactive
+                      ? undefined
+                      : {
+                          background: buildDayBackground(entry.statuses),
+                          borderColor: entry.statuses.length ? '#c7d0dc' : '#e2e7ee',
+                          color: '#fff',
+                        }
+                  }
                   title={
                     entry.isFuture
                       ? `Day ${entry.day}: Future`
                       : entry.isWeekend
                       ? `Day ${entry.day}: Weekend`
-                      : `Day ${entry.day}: ${statusLabel[entry.status as DayStatus]}`
+                      : `Day ${entry.day}: ${
+                          entry.statuses.length ? entry.statuses.map((status) => statusLabel[status]).join(', ') : 'No status'
+                        }`
                   }
                 >
                   {entry.day}
@@ -485,18 +621,29 @@ export default function EmployeeHomePage() {
               <span><i className="dot partial" /> Partial</span>
               <span><i className="dot late" /> Late</span>
               <span><i className="dot absent" /> Absent</span>
+              <span><i className="dot wfh" /> WFH</span>
             </div>
             <div className="employee-day-detail">
               <strong>
                 Day {activeDay.day}:{' '}
-                {activeDay.status ? statusLabel[activeDay.status] : activeDay.isFuture ? 'Future' : 'Weekend'}
+                {activeDay.statuses.length
+                  ? activeDay.statuses.map((status) => statusLabel[status]).join(', ')
+                  : activeDay.isFuture
+                  ? 'Future'
+                  : 'Weekend'}
               </strong>
               <small>
-                {!activeDay.status
+                {!activeDay.statuses.length
                   ? 'No status for this day.'
-                  : activeDay.status === 'absent'
+                  : activeDay.statuses.includes('absent') && !activeDay.statuses.includes('wfh')
                   ? 'No attendance logged.'
-                  : `${activeDay.hours} working hours (dummy)`}
+                  : activeDay.hours > 0
+                  ? `${activeDay.hours} working hours`
+                  : activeDay.statuses.includes('wfh')
+                  ? 'WFH day'
+                  : activeDay.statuses.some((status) => status === 'late' || status === 'partial' || status === 'full')
+                  ? 'Attendance logged (checkout pending).'
+                  : 'Status recorded.'}
               </small>
             </div>
           </article>
@@ -534,6 +681,28 @@ export default function EmployeeHomePage() {
             </small>
             <button type="button" onClick={() => router.push('/leave-management')}>
               Open Leave
+            </button>
+          </article>
+
+          <article className="card employee-leave-card">
+            <h3>WFH Status</h3>
+            <p>Your work from home request summary</p>
+            <div className="employee-leave-stats">
+              <span className="pending">Pending: {wfhSummary.pending}</span>
+              <span className="approved">Approved: {wfhSummary.approved}</span>
+              <span className="rejected">Rejected: {wfhSummary.rejected}</span>
+            </div>
+            <small className="employee-leave-last">
+              {wfhLoading
+                ? 'Loading WFH status...'
+                : wfhSummary.approvedThisMonth > 0
+                ? `Approved this month: ${wfhSummary.approvedThisMonth}${wfhSummary.recentApprovedRange ? ` (latest: ${wfhSummary.recentApprovedRange})` : ''}`
+                : wfhSummary.pending > 0
+                ? `${wfhSummary.pending} request(s) pending approval.`
+                : 'No WFH requests yet this month.'}
+            </small>
+            <button type="button" onClick={() => router.push('/wfh')}>
+              Open WFH
             </button>
           </article>
         </aside>

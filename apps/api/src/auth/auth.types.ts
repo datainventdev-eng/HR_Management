@@ -6,6 +6,7 @@ export interface AppUser {
   full_name: string;
   role: UserRole;
   employee_id: string | null;
+  employment_type: 'full_time_employee' | 'contractor';
   must_change_password: boolean;
   password_hash: string;
   refresh_token_hash: string | null;

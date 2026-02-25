@@ -14,6 +14,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { WfhModule } from './wfh/wfh.module';
 
 @Module({
   controllers: [HealthController],
@@ -30,6 +31,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
     DashboardModule,
     DatabaseModule,
     AuthModule,
+    WfhModule,
   ],
   providers: [
     {

@@ -135,6 +135,62 @@ export class AttendanceService implements OnModuleInit {
     }));
   }
 
+  async updateShift(
+    ctx: AttendanceContext,
+    id: string,
+    payload: { name?: string; startTime?: string; endTime?: string },
+  ) {
+    this.assertHrAdmin(ctx);
+    const existing = await this.db.query<{ id: string }>(`SELECT id FROM attendance_shifts WHERE id = $1 LIMIT 1`, [id]);
+    if (!existing.rows[0]) {
+      throw new BadRequestException('Shift does not exist.');
+    }
+
+    await this.db.query(
+      `
+      UPDATE attendance_shifts
+      SET
+        name = COALESCE(NULLIF($2, ''), name),
+        start_time = COALESCE(NULLIF($3, ''), start_time),
+        end_time = COALESCE(NULLIF($4, ''), end_time)
+      WHERE id = $1
+      `,
+      [id, payload.name ?? null, payload.startTime ?? null, payload.endTime ?? null],
+    );
+
+    const refreshed = await this.db.query<{ id: string; name: string; start_time: string; end_time: string }>(
+      `SELECT id, name, start_time, end_time FROM attendance_shifts WHERE id = $1 LIMIT 1`,
+      [id],
+    );
+
+    const row = refreshed.rows[0];
+    return {
+      id: row.id,
+      name: row.name,
+      startTime: row.start_time,
+      endTime: row.end_time,
+    };
+  }
+
+  async deleteShift(ctx: AttendanceContext, id: string) {
+    this.assertHrAdmin(ctx);
+    const existing = await this.db.query<{ id: string }>(`SELECT id FROM attendance_shifts WHERE id = $1 LIMIT 1`, [id]);
+    if (!existing.rows[0]) {
+      throw new BadRequestException('Shift does not exist.');
+    }
+
+    const linkedAssignments = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM attendance_shift_assignments WHERE shift_id = $1`,
+      [id],
+    );
+    if (Number(linkedAssignments.rows[0]?.count || '0') > 0) {
+      throw new BadRequestException('Cannot delete shift with active assignments.');
+    }
+
+    await this.db.query(`DELETE FROM attendance_shifts WHERE id = $1`, [id]);
+    return { success: true };
+  }
+
   async assignShift(
     ctx: AttendanceContext,
     payload: {
@@ -197,8 +253,8 @@ export class AttendanceService implements OnModuleInit {
 
     const date = payload?.date ?? this.today();
     const time = payload?.time ?? this.currentTime();
-    const officeHours = await this.getOfficeHours();
-    const result = await this.upsertCheckInRecord(ctx.employeeId, date, time, officeHours.startTime);
+    const schedule = await this.resolveScheduleForEmployee(ctx.employeeId, date);
+    const result = await this.upsertCheckInRecord(ctx.employeeId, date, time, schedule.startTime);
     if (result.status === 'skipped') {
       throw new BadRequestException('You already checked in for this day.');
     }
@@ -215,7 +271,6 @@ export class AttendanceService implements OnModuleInit {
       throw new BadRequestException('At least one entry is required.');
     }
 
-    const officeHours = await this.getOfficeHours();
     const results: Array<{ employeeId: string; date: string; status: 'created' | 'updated' | 'skipped'; record: AttendanceRecord }> = [];
 
     for (const entry of payload.entries) {
@@ -224,7 +279,8 @@ export class AttendanceService implements OnModuleInit {
       }
       const date = entry.date ?? this.today();
       const time = entry.time ?? this.currentTime();
-      const output = await this.upsertCheckInRecord(entry.employeeId.trim(), date, time, officeHours.startTime);
+      const schedule = await this.resolveScheduleForEmployee(entry.employeeId.trim(), date);
+      const output = await this.upsertCheckInRecord(entry.employeeId.trim(), date, time, schedule.startTime);
       results.push({
         employeeId: entry.employeeId.trim(),
         date,
@@ -255,7 +311,7 @@ export class AttendanceService implements OnModuleInit {
 
     const date = payload?.date ?? this.today();
     const time = payload?.time ?? this.currentTime();
-    const officeHours = await this.getOfficeHours();
+    const schedule = await this.resolveScheduleForEmployee(ctx.employeeId, date);
 
     const result = await this.db.query<DbAttendanceRecord>(
       `SELECT * FROM attendance_records WHERE employee_id = $1 AND date = $2 LIMIT 1`,
@@ -271,7 +327,7 @@ export class AttendanceService implements OnModuleInit {
       throw new BadRequestException('You already checked out for this day.');
     }
 
-    const leftEarly = this.isBefore(time, officeHours.endTime);
+    const leftEarly = this.isBefore(time, schedule.endTime);
     const totalHours = this.hoursBetween(record.check_in_time, time);
 
     await this.db.query(
@@ -288,6 +344,45 @@ export class AttendanceService implements OnModuleInit {
 
     const refreshed = await this.db.query<DbAttendanceRecord>(`SELECT * FROM attendance_records WHERE id = $1 LIMIT 1`, [record.id]);
     return this.mapRecord(refreshed.rows[0]);
+  }
+
+  private async resolveScheduleForEmployee(employeeId: string, date: string) {
+    const assigned = await this.db.query<{ start_time: string; end_time: string }>(
+      `
+      SELECT s.start_time, s.end_time
+      FROM attendance_shift_assignments a
+      JOIN attendance_shifts s ON s.id = a.shift_id
+      WHERE a.employee_id = $1
+        AND $2::date BETWEEN a.from_date AND a.to_date
+      ORDER BY a.from_date DESC
+      LIMIT 1
+      `,
+      [employeeId, date],
+    );
+    if (assigned.rows[0]) {
+      return {
+        startTime: assigned.rows[0].start_time,
+        endTime: assigned.rows[0].end_time,
+      };
+    }
+
+    const general = await this.db.query<{ start_time: string; end_time: string }>(
+      `
+      SELECT start_time, end_time
+      FROM attendance_shifts
+      WHERE LOWER(name) = 'general'
+      ORDER BY created_at ASC
+      LIMIT 1
+      `,
+    );
+    if (general.rows[0]) {
+      return {
+        startTime: general.rows[0].start_time,
+        endTime: general.rows[0].end_time,
+      };
+    }
+
+    return this.getOfficeHours();
   }
 
   async monthlyAttendance(ctx: AttendanceContext, payload?: { employeeId?: string; month?: string }) {

@@ -78,18 +78,22 @@ textarea {
 
 select {
   min-height: 42px;
-  padding: 10px 36px 10px 12px;
+  padding: 10px 42px 10px 12px;
   line-height: 1.2;
   border: 1px solid var(--border);
   border-radius: 7px;
   background-color: #fff;
   color: var(--text);
+  cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23606a78' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2346515f' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"),
+    linear-gradient(#e2e7ee, #e2e7ee);
   background-repeat: no-repeat;
-  background-position: right 12px center;
+  background-position: right 12px center, right 34px center;
+  background-size: 14px 14px, 1px 62%;
 }
 
 .network-progress {
@@ -146,6 +150,32 @@ select {
   color: #9f2b2b;
   border-color: #f4c2c2;
   background: #fff1f1;
+}
+
+.coming-soon-lock {
+  position: relative;
+}
+
+.coming-soon-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(26, 95, 190, 0.58);
+  pointer-events: all;
+}
+
+.coming-soon-text {
+  padding: 12px 18px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  background: rgba(6, 29, 66, 0.55);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .app-shell {
@@ -308,7 +338,7 @@ select {
 .topbar select {
   min-height: 42px;
   padding: 10px 36px 10px 12px;
-  background: #fff;
+  background-color: #fff;
 }
 
 .topbar-meta {
@@ -508,6 +538,76 @@ small {
 
 .attendance-bar-fill.absent {
   background: linear-gradient(90deg, #ffd7b2 0%, #ffe8d3 100%);
+}
+
+.employment-type-card {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 10px 12px;
+  align-self: start;
+}
+
+.employment-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.employment-head h2 {
+  margin: 0;
+}
+
+.employment-head small {
+  font-size: 0.7rem;
+  color: #647080;
+}
+
+.employment-rows {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 6px;
+}
+
+.employment-row {
+  border-radius: 10px;
+  border: 1px solid #ffe4cf;
+  padding: 7px 10px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.employment-row.full-time {
+  background: #f6fff9;
+  border-color: #a9e8bf;
+}
+
+.employment-row.contractor {
+  background: #fffcf8;
+}
+
+.employment-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+.employment-row-head strong {
+  font-size: 1rem;
+  line-height: 1;
+  color: #262f3d;
+}
+
+.employment-row p {
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #445062;
 }
 
 .schedule-head {
@@ -895,7 +995,7 @@ a:focus-visible {
   border: 1px solid var(--border);
   border-radius: 7px;
   padding: 9px 10px;
-  background: #fff;
+  background-color: #fff;
 }
 
 .form-grid label {
@@ -916,10 +1016,16 @@ a:focus-visible {
 }
 
 .simple-list li {
-  border: 1px solid var(--border);
+  border: 1px solid #e2e7ee;
+  border-left: 4px solid #ffd8bb;
   border-radius: 7px;
-  background: #fff;
-  padding: 10px;
+  background: #f8fafc;
+  padding: 10px 12px;
+}
+
+.simple-list li:hover {
+  background: #f4f7fb;
+  border-color: #d6dde7;
 }
 
 .text-danger {
@@ -935,6 +1041,7 @@ a:focus-visible {
 
 .pending-orange-list li {
   border-color: #ffd7b2;
+  border-left-color: #ff9a4b;
   background: #fff6ed;
   color: #a14e08;
 }
@@ -1157,7 +1264,7 @@ a:focus-visible {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px;
-  background: #fff;
+  background-color: #fff;
 }
 
 .timesheet-row-total {
@@ -1314,17 +1421,21 @@ a:focus-visible {
 
 .employee-leave-card {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  padding: 12px 14px;
 }
 
 .employee-leave-stats {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .employee-leave-stats span {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .employee-leave-stats .pending {
@@ -1340,6 +1451,8 @@ a:focus-visible {
 }
 
 .employee-leave-last {
+  margin-top: 2px;
+  font-size: 0.76rem;
   color: #5f6874;
 }
 
@@ -1348,7 +1461,7 @@ a:focus-visible {
   border-radius: 8px;
   background: #fff8f2;
   color: #ad5208;
-  padding: 8px 10px;
+  padding: 7px 10px;
   cursor: pointer;
 }
 
@@ -1438,6 +1551,12 @@ a:focus-visible {
   background: #fff6d9;
   border-color: #ddb64f;
   color: #6f5612;
+}
+
+.employee-status-chips span.wfh {
+  background: #f2efff;
+  border-color: #cfc6ff;
+  color: #4636c8;
 }
 
 .employee-status-calendar {
@@ -1540,6 +1659,10 @@ a:focus-visible {
 
 .employee-status-legend .dot.absent {
   background: #d4a72c;
+}
+
+.employee-status-legend .dot.wfh {
+  background: #6a5cff;
 }
 
 .employee-day-detail {

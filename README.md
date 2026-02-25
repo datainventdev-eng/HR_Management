@@ -74,6 +74,49 @@ npm run test
 npm run build
 ```
 
+## Local MCP Server (Timesheet Logging)
+
+This repo now includes a local MCP server at `apps/mcp` so you can log timesheets from text without opening dashboard screens.
+
+### 1. Configure env vars
+
+In your terminal session:
+
+```bash
+export HR_API_URL="http://localhost:4000"
+export HR_ACCESS_TOKEN="<employee-access-token>"
+export HR_EMPLOYEE_ID="<employee-profile-id>"
+export HR_ROLE="employee"
+```
+
+`HR_ACCESS_TOKEN` should be a valid JWT from your login flow.
+
+### 2. Run the MCP server
+
+```bash
+npm run dev:mcp
+```
+
+### 3. Available MCP tools
+
+- `list_timesheet_catalog`  
+  Returns customers/projects from your HR API.
+- `log_timesheet_from_text`  
+  Logs one or more single-entry timesheets from text.
+
+Input format for `log_timesheet_from_text` (`summary_text`):
+
+```text
+Customer Name | Project Name | 4.5 | yes | API fixes
+2026-02-18 > Customer Name | Project Name | 1:30 | no | Internal review
+```
+
+Rules:
+- One entry per line
+- Columns are pipe-separated (`|`)
+- Duration accepts `4`, `4.5`, or `4:20`
+- Optional date prefix per line: `YYYY-MM-DD > ...`
+
 ## Delivery Rules
 
 Project execution follows the rulebook artifacts in repository root:

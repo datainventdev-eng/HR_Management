@@ -36,6 +36,8 @@ export default function AttendanceTimePage() {
   const [message, setMessage] = useState('');
   const [officeHours, setOfficeHours] = useState({ startTime: '09:00', endTime: '18:00' });
   const [shiftForm, setShiftForm] = useState({ name: '', startTime: '09:00', endTime: '18:00' });
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
+  const [shiftEditForm, setShiftEditForm] = useState({ name: '', startTime: '', endTime: '' });
   const [assignmentForm, setAssignmentForm] = useState({ employeeId: '', shiftId: '', fromDate: '', toDate: '' });
 
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
@@ -61,16 +63,6 @@ export default function AttendanceTimePage() {
     }
 
     return payload;
-  }
-
-  async function seedDemo() {
-    try {
-      const result = await callApi('/attendance/seed-demo', { method: 'POST' });
-      setMessage(result.message);
-      await refreshAll();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Failed to seed data.');
-    }
   }
 
   async function refreshAll() {
@@ -119,6 +111,38 @@ export default function AttendanceTimePage() {
     }
   }
 
+  function startShiftEdit(shift: Shift) {
+    setEditingShiftId(shift.id);
+    setShiftEditForm({ name: shift.name, startTime: shift.startTime, endTime: shift.endTime });
+  }
+
+  async function saveShiftEdit() {
+    if (!editingShiftId) return;
+    try {
+      await callApi(`/attendance/shifts/${editingShiftId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(shiftEditForm),
+      });
+      setEditingShiftId(null);
+      setMessage('Shift updated.');
+      await refreshAll();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to update shift.');
+    }
+  }
+
+  async function removeShift(shift: Shift) {
+    if (!window.confirm(`Delete shift "${shift.name}"?`)) return;
+    try {
+      await callApi(`/attendance/shifts/${shift.id}`, { method: 'DELETE' });
+      if (editingShiftId === shift.id) setEditingShiftId(null);
+      setMessage('Shift deleted.');
+      await refreshAll();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to delete shift.');
+    }
+  }
+
   async function assignShift(event: FormEvent) {
     event.preventDefault();
     try {
@@ -133,26 +157,6 @@ export default function AttendanceTimePage() {
     }
   }
 
-  async function checkIn() {
-    try {
-      const result = await callApi('/attendance/check-in', { method: 'POST', body: JSON.stringify({}) }, 'employee');
-      setMessage(`Checked in at ${result.checkInTime}.`);
-      await refreshAll();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Check-in failed.');
-    }
-  }
-
-  async function checkOut() {
-    try {
-      const result = await callApi('/attendance/check-out', { method: 'POST', body: JSON.stringify({}) }, 'employee');
-      setMessage(`Checked out at ${result.checkOutTime}.`);
-      await refreshAll();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Check-out failed.');
-    }
-  }
-
   useEffect(() => {
     refreshAll();
   }, []);
@@ -162,23 +166,6 @@ export default function AttendanceTimePage() {
       <header className="card">
         <h1>Attendance and Time</h1>
         <p>Simple check-in/out, office hours, shifts, and monthly records for V1.</p>
-        <div className="form-grid compact-grid">
-          <input value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} placeholder="Employee ID context" />
-          <div className="row-actions">
-            <button type="button" onClick={seedDemo}>
-              Seed Demo
-            </button>
-            <button type="button" onClick={refreshAll}>
-              Refresh
-            </button>
-            <button type="button" onClick={checkIn}>
-              Check In
-            </button>
-            <button type="button" onClick={checkOut}>
-              Check Out
-            </button>
-          </div>
-        </div>
         <FeedbackMessage message={message} />
       </header>
 
@@ -225,8 +212,38 @@ export default function AttendanceTimePage() {
           </form>
           <ul className="simple-list">
             {shifts.map((shift) => (
-              <li key={shift.id}>
-                {shift.name}: {shift.startTime} - {shift.endTime}
+              <li key={shift.id} className="list-item-actions">
+                {editingShiftId === shift.id ? (
+                  <div className="inline-edit-grid">
+                    <input
+                      value={shiftEditForm.name}
+                      onChange={(event) => setShiftEditForm((prev) => ({ ...prev, name: event.target.value }))}
+                      placeholder="Shift name"
+                    />
+                    <input
+                      value={shiftEditForm.startTime}
+                      onChange={(event) => setShiftEditForm((prev) => ({ ...prev, startTime: event.target.value }))}
+                      placeholder="Start HH:MM"
+                    />
+                    <input
+                      value={shiftEditForm.endTime}
+                      onChange={(event) => setShiftEditForm((prev) => ({ ...prev, endTime: event.target.value }))}
+                      placeholder="End HH:MM"
+                    />
+                    <div className="icon-actions">
+                      <button type="button" title="Save" onClick={saveShiftEdit} aria-label="Save shift">✓</button>
+                      <button type="button" title="Cancel" onClick={() => setEditingShiftId(null)} aria-label="Cancel edit">✕</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <span>{shift.name}: {shift.startTime} - {shift.endTime}</span>
+                    <div className="icon-actions">
+                      <button type="button" title="Edit" onClick={() => startShiftEdit(shift)} aria-label="Edit shift">✎</button>
+                      <button type="button" title="Delete" onClick={() => removeShift(shift)} aria-label="Delete shift">🗑</button>
+                    </div>
+                  </>
+                )}
               </li>
             ))}
           </ul>

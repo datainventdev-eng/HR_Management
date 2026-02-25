@@ -168,7 +168,7 @@ export default function RecruitmentPage() {
   }, []);
 
   return (
-    <main className="recruitment-page">
+    <main className="recruitment-page coming-soon-lock">
       <header className="card">
         <h1>Recruitment</h1>
         <p>Jobs, candidates, pipeline stages, interviews, feedback, offers, and candidate conversion.</p>
@@ -304,6 +304,9 @@ export default function RecruitmentPage() {
           </form>
         </article>
       </section>
+      <div className="coming-soon-overlay">
+        <div className="coming-soon-text">Coming Soon</div>
+      </div>
     </main>
   );
 }

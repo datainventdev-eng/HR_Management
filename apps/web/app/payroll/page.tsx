@@ -115,7 +115,7 @@ export default function PayrollPage() {
   }, []);
 
   return (
-    <main className="payroll-page">
+    <main className="payroll-page coming-soon-lock">
       <header className="card">
         <h1>Payroll</h1>
         <p>Simple salary components, monthly payroll run, finalize, and payslips.</p>
@@ -189,6 +189,9 @@ export default function PayrollPage() {
           </ul>
         </article>
       </section>
+      <div className="coming-soon-overlay">
+        <div className="coming-soon-text">Coming Soon</div>
+      </div>
     </main>
   );
 }

@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { clearSession, getSession } from './lib.session';
 
 type Overview = {
@@ -43,6 +44,11 @@ type Overview = {
       onTime: number;
     };
   };
+  employmentTypeSummary: {
+    total: number;
+    fullTime: number;
+    contractor: number;
+  };
   schedule: Array<{ id: string; title: string; time: string }>;
   quickActions: string[];
   recentActivity: Array<{ id: string; action: string; entity: string; createdAt: string }>;
@@ -53,6 +59,7 @@ const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 export default function HomePage() {
   const router = useRouter();
+  const pathname = usePathname();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [message, setMessage] = useState('');
   const [role, setRole] = useState<'employee' | 'manager' | 'hr_admin'>('hr_admin');
@@ -69,7 +76,6 @@ export default function HomePage() {
   const [projectScope, setProjectScope] = useState<'month' | 'all'>('month');
   const [projectHoursData, setProjectHoursData] = useState<Array<{ projectId: string; name: string; customerName?: string; hours: number }>>([]);
   const [projectHoursLoading, setProjectHoursLoading] = useState(false);
-  const [schedulePage, setSchedulePage] = useState(0);
 
   async function loadOverview(nextRole = role) {
     try {
@@ -302,112 +308,19 @@ export default function HomePage() {
       }),
     [currentMonth],
   );
-  const scheduleBaseHour = useMemo(() => new Date().getHours(), []);
-  const hoursPerPage = 5;
-  const scheduleWindowStart = useMemo(() => {
-    const start = new Date();
-    start.setMinutes(0, 0, 0);
-    start.setHours(scheduleBaseHour + schedulePage * hoursPerPage);
-    return start;
-  }, [scheduleBaseHour, schedulePage]);
-  const scheduleWindowEnd = useMemo(() => {
-    const end = new Date(scheduleWindowStart);
-    end.setHours(end.getHours() + hoursPerPage);
-    return end;
-  }, [scheduleWindowStart]);
-  const visibleHourTicks = useMemo(
-    () =>
-      Array.from({ length: hoursPerPage }, (_, index) => {
-        const date = new Date(scheduleWindowStart);
-        date.setHours(date.getHours() + index);
-        return date;
-      }),
-    [scheduleWindowStart],
-  );
-  const scheduleRangeLabel = useMemo(() => {
-    const dateLabel = scheduleWindowStart.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-    const startHourRaw = scheduleWindowStart.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
-    const endTick = new Date(scheduleWindowStart);
-    endTick.setHours(endTick.getHours() + (hoursPerPage - 1));
-    const endHourRaw = endTick.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
-
-    const [startNum, startMeridiem] = startHourRaw.split(' ');
-    const [endNum, endMeridiem] = endHourRaw.split(' ');
-    const range =
-      startMeridiem === endMeridiem
-        ? `${startNum}-${endNum} ${startMeridiem}`
-        : `${startNum} ${startMeridiem} - ${endNum} ${endMeridiem}`;
-
-    return `${dateLabel} | ${range}`;
-  }, [hoursPerPage, scheduleWindowStart]);
-  const scheduleDummyEvents = useMemo(() => {
-    const base = new Date();
-    base.setMinutes(0, 0, 0);
-    return [
-      {
-        id: 'sch_1',
-        title: 'Staff Meeting',
-        startAt: new Date(base.getTime() + 1 * 60 * 60 * 1000),
-        endAt: new Date(base.getTime() + 2 * 60 * 60 * 1000),
-        row: 0,
-        tone: 'primary' as const,
-      },
-      {
-        id: 'sch_2',
-        title: 'Training Session',
-        startAt: new Date(base.getTime() + 2 * 60 * 60 * 1000),
-        endAt: new Date(base.getTime() + 4 * 60 * 60 * 1000),
-        row: 1,
-        tone: 'soft' as const,
-      },
-      {
-        id: 'sch_3',
-        title: 'Client Sync',
-        startAt: new Date(base.getTime() + 4 * 60 * 60 * 1000),
-        endAt: new Date(base.getTime() + 5 * 60 * 60 * 1000),
-        row: 2,
-        tone: 'muted' as const,
-      },
-      {
-        id: 'sch_4',
-        title: 'Interview Review',
-        startAt: new Date(base.getTime() + 6 * 60 * 60 * 1000),
-        endAt: new Date(base.getTime() + 7 * 60 * 60 * 1000),
-        row: 0,
-        tone: 'primary' as const,
-      },
-      {
-        id: 'sch_5',
-        title: 'Planning Call',
-        startAt: new Date(base.getTime() + 8 * 60 * 60 * 1000),
-        endAt: new Date(base.getTime() + 10 * 60 * 60 * 1000),
-        row: 1,
-        tone: 'soft' as const,
-      },
-    ];
-  }, []);
-  const scheduleVisibleEvents = useMemo(() => {
-    const windowStartMs = scheduleWindowStart.getTime();
-    const windowEndMs = scheduleWindowEnd.getTime();
-    const totalMinutes = hoursPerPage * 60;
-    return scheduleDummyEvents
-      .filter((event) => event.endAt.getTime() > windowStartMs && event.startAt.getTime() < windowEndMs)
-      .map((event) => {
-        const startMs = Math.max(event.startAt.getTime(), windowStartMs);
-        const endMs = Math.min(event.endAt.getTime(), windowEndMs);
-        const left = ((startMs - windowStartMs) / 60000 / totalMinutes) * 100;
-        const width = Math.max(((endMs - startMs) / 60000 / totalMinutes) * 100, 12);
-        return {
-          ...event,
-          left,
-          width,
-        };
-      });
-  }, [hoursPerPage, scheduleDummyEvents, scheduleWindowEnd, scheduleWindowStart]);
+  const employmentTypeSummary = useMemo(() => {
+    const summary = overview?.employmentTypeSummary;
+    const total = summary?.total ?? 0;
+    const fullTime = summary?.fullTime ?? 0;
+    const contractor = summary?.contractor ?? 0;
+    return {
+      total,
+      fullTime,
+      contractor,
+      fullTimePct: total > 0 ? Math.round((fullTime / total) * 100) : 0,
+      contractorPct: total > 0 ? Math.round((contractor / total) * 100) : 0,
+    };
+  }, [overview]);
 
   async function openProjectHours(projectId: string, projectName: string) {
     try {
@@ -466,17 +379,22 @@ export default function HomePage() {
 
       <aside className="sidebar">
         <nav>
-          <a className="nav-item active" href="/">Dashboard</a>
-          <a className="nav-item" href="/core-hr">Core HR</a>
-          <a className="nav-item" href="/attendance-time">Attendance & Time</a>
-          <a className="nav-item" href="/timesheets">Timesheets</a>
-          <a className="nav-item" href="/leave-management">Leave Management</a>
-          <a className="nav-item" href="/payroll">Payroll</a>
-          <a className="nav-item" href="/recruitment">Recruitment</a>
-          <a className="nav-item" href="/analytics">Analytics</a>
-          <a className="nav-item" href="/documents">Documents</a>
-          {role === 'hr_admin' && <a className="nav-item" href="/admin-users">User Access</a>}
-          <a className="nav-item" href="#">Settings</a>
+          <Link className={`nav-item${pathname === '/' ? ' active' : ''}`} href="/">Dashboard</Link>
+          <Link className={`nav-item${pathname === '/core-hr' ? ' active' : ''}`} href="/core-hr">Core HR</Link>
+          <Link className={`nav-item${pathname === '/attendance-time' ? ' active' : ''}`} href="/attendance-time">Attendance & Time</Link>
+          <Link className={`nav-item${pathname === '/timesheets' ? ' active' : ''}`} href="/timesheets">Timesheets</Link>
+          <Link className={`nav-item${pathname === '/leave-management' ? ' active' : ''}`} href="/leave-management">Leave Management</Link>
+          <Link className={`nav-item${pathname === '/wfh' ? ' active' : ''}`} href="/wfh">WFH</Link>
+          <Link className={`nav-item${pathname === '/payroll' ? ' active' : ''}`} href="/payroll">Payroll</Link>
+          <Link className={`nav-item${pathname === '/recruitment' ? ' active' : ''}`} href="/recruitment">Recruitment</Link>
+          <Link className={`nav-item${pathname === '/analytics' ? ' active' : ''}`} href="/analytics">Analytics</Link>
+          <Link className={`nav-item${pathname === '/documents' ? ' active' : ''}`} href="/documents">Documents</Link>
+          {role === 'hr_admin' && (
+            <Link className={`nav-item${pathname === '/admin-users' ? ' active' : ''}`} href="/admin-users">
+              User Access
+            </Link>
+          )}
+          <Link className={`nav-item${pathname === '/settings' ? ' active' : ''}`} href="/settings">Settings</Link>
         </nav>
       </aside>
 
@@ -560,53 +478,22 @@ export default function HomePage() {
             </div>
           </article>
 
-          <article className="card schedule-card">
-            <div className="schedule-head">
-              <div>
-                <h2>Events</h2>
-              </div>
-              <div className="schedule-nav">
-                <button
-                  type="button"
-                  onClick={() => setSchedulePage((prev) => Math.max(0, prev - 1))}
-                  disabled={schedulePage === 0}
-                  aria-label="Previous hours"
-                >
-                  <span aria-hidden="true">←</span>
-                </button>
-                <span className="schedule-range-label">{scheduleRangeLabel}</span>
-                <button type="button" onClick={() => setSchedulePage((prev) => prev + 1)} aria-label="Next hours">
-                  <span aria-hidden="true">→</span>
-                </button>
-              </div>
+          <article className="card employment-type-card">
+            <div className="employment-head">
+              <h2>Total Employees</h2>
+              <small>{employmentTypeSummary.total} total employees</small>
             </div>
-            <div className="schedule-timeline-scroll">
-              <div className="schedule-timeline-inner">
-                <div className="schedule-hours-row">
-                  {visibleHourTicks.map((tick) => (
-                    <span key={tick.toISOString()}>
-                      {tick.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).replace(' ', '')}
-                    </span>
-                  ))}
+            <div className="employment-rows">
+              <div className="employment-row full-time">
+                <div className="employment-row-head">
+                  <p>Full Time Employee</p>
+                  <strong>{employmentTypeSummary.fullTime}</strong>
                 </div>
-                <div className="schedule-timeline-body">
-                  {visibleHourTicks.map((tick) => (
-                    <span key={tick.toISOString()} className="schedule-hour-guide" />
-                  ))}
-                  {scheduleVisibleEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className={`schedule-event-pill ${event.tone}`}
-                      style={{
-                        left: `${event.left}%`,
-                        width: `${event.width}%`,
-                        top: `${18 + event.row * 58}px`,
-                      }}
-                    >
-                      {event.title}
-                    </div>
-                  ))}
-                  {scheduleVisibleEvents.length === 0 && <small className="schedule-empty">No meetings in this hour range.</small>}
+              </div>
+              <div className="employment-row contractor">
+                <div className="employment-row-head">
+                  <p>Contractor</p>
+                  <strong>{employmentTypeSummary.contractor}</strong>
                 </div>
               </div>
             </div>

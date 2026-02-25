@@ -12,6 +12,7 @@ type CreatedUser = {
   email: string;
   fullName: string;
   role: 'employee' | 'manager' | 'hr_admin';
+  employmentType: 'full_time_employee' | 'contractor';
   employeeId?: string;
   mustChangePassword: boolean;
 };
@@ -22,6 +23,7 @@ export default function AdminUsersPage() {
     email: '',
     fullName: '',
     role: 'employee' as 'employee' | 'manager' | 'hr_admin',
+    employmentType: 'full_time_employee' as 'full_time_employee' | 'contractor',
     employeeId: '',
     joinDate: '',
     departmentId: '',
@@ -79,6 +81,7 @@ export default function AdminUsersPage() {
           email: form.email,
           fullName: form.fullName,
           role: form.role,
+          employmentType: form.employmentType,
           employeeId: form.employeeId || undefined,
           joinDate: form.joinDate || undefined,
           departmentId: form.departmentId || undefined,
@@ -98,6 +101,7 @@ export default function AdminUsersPage() {
         email: '',
         fullName: '',
         role: 'employee',
+        employmentType: 'full_time_employee',
         employeeId: '',
         joinDate: '',
         departmentId: '',
@@ -131,6 +135,13 @@ export default function AdminUsersPage() {
               <option value="employee">Employee</option>
               <option value="manager">Manager</option>
               <option value="hr_admin">HR Admin</option>
+            </select>
+            <select
+              value={form.employmentType}
+              onChange={(e) => setForm((p) => ({ ...p, employmentType: e.target.value as typeof p.employmentType }))}
+            >
+              <option value="full_time_employee">Full Time Employee</option>
+              <option value="contractor">Contractor</option>
             </select>
             {(form.role === 'employee' || form.role === 'manager') && (
               <>
@@ -177,6 +188,7 @@ export default function AdminUsersPage() {
             <div className="simple-list">
               <li>Email: {createdUser.email}</li>
               <li>Role: {createdUser.role}</li>
+              <li>Employment type: {createdUser.employmentType === 'contractor' ? 'Contractor' : 'Full Time Employee'}</li>
               <li>Must change password: {createdUser.mustChangePassword ? 'Yes' : 'No'}</li>
               <li>Temporary password: {temporaryPassword}</li>
             </div>

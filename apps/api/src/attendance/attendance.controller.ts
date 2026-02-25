@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import { AttendanceRole } from './attendance.types';
 
@@ -29,6 +29,20 @@ export class AttendanceController {
   @Post('shifts')
   createShift(@Headers() headers: Record<string, string>, @Body() body: { name: string; startTime: string; endTime: string }) {
     return this.attendanceService.createShift(this.ctx(headers), body);
+  }
+
+  @Patch('shifts/:id')
+  updateShift(
+    @Headers() headers: Record<string, string>,
+    @Param('id') id: string,
+    @Body() body: { name?: string; startTime?: string; endTime?: string },
+  ) {
+    return this.attendanceService.updateShift(this.ctx(headers), id, body);
+  }
+
+  @Delete('shifts/:id')
+  deleteShift(@Headers() headers: Record<string, string>, @Param('id') id: string) {
+    return this.attendanceService.deleteShift(this.ctx(headers), id);
   }
 
   @Get('shift-assignments')

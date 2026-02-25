@@ -32,6 +32,9 @@ export class CreateUserDto {
   @IsIn(['employee', 'manager', 'hr_admin'])
   role!: 'employee' | 'manager' | 'hr_admin';
 
+  @IsIn(['full_time_employee', 'contractor'])
+  employmentType!: 'full_time_employee' | 'contractor';
+
   @IsOptional()
   @IsString()
   employeeId?: string;

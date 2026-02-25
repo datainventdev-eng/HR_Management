@@ -10,6 +10,7 @@
     "dev:web": "npm run dev -w web",
     "dev:api": "npm run start:dev -w api",
     "dev:api:nodemon": "npm run start:nodemon -w api",
+    "dev:mcp": "npm run dev -w mcp",
     "lint": "npm run lint -ws --if-present",
     "test": "npm run test -ws --if-present",
     "build": "npm run build -ws --if-present"

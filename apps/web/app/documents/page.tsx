@@ -92,7 +92,7 @@ export default function DocumentsPage() {
   }, []);
 
   return (
-    <main className="documents-page">
+    <main className="documents-page coming-soon-lock">
       <header className="card">
         <h1>Documents</h1>
         <p>Employee documents, company policies, and expiring-document visibility.</p>
@@ -153,6 +153,9 @@ export default function DocumentsPage() {
           </ul>
         </article>
       </section>
+      <div className="coming-soon-overlay">
+        <div className="coming-soon-text">Coming Soon</div>
+      </div>
     </main>
   );
 }

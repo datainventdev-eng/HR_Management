@@ -29,6 +29,7 @@ export class DashboardService {
       ctx.role === 'manager' ? ctx.employeeId : undefined,
     );
     const attendanceTrends = await this.attendanceTrendSummary(attendance.date, headcount.total);
+    const employmentTypeSummary = await this.employmentTypeSummary(headcount.total);
 
     return {
       greeting: ctx.role === 'employee' ? 'Welcome back' : 'Good Morning',
@@ -42,6 +43,7 @@ export class DashboardService {
       },
       attendance,
       attendanceTrends,
+      employmentTypeSummary,
       schedule: [
         { id: 'ev1', title: 'Team Standup', time: '09:00 AM' },
         { id: 'ev2', title: 'Interview Block', time: '02:30 PM' },
@@ -49,6 +51,27 @@ export class DashboardService {
       quickActions: ['Add Employee', 'Process Payroll', 'Schedule Interview', 'Generate Report'],
       recentActivity: await this.opsService.latestActivity(6),
       projectHours: await this.projectHours(month),
+    };
+  }
+
+  private async employmentTypeSummary(totalEmployees: number) {
+    const contractorResult = await this.db.query<{ count: string }>(
+      `
+      SELECT COUNT(*)::text AS count
+      FROM app_users
+      WHERE role IN ('employee', 'manager')
+        AND employment_type = 'contractor'
+      `,
+    );
+
+    const contractors = Number(contractorResult.rows[0]?.count || '0');
+    const contractorCount = Math.min(Math.max(contractors, 0), Math.max(totalEmployees, 0));
+    const fullTimeCount = Math.max(totalEmployees - contractorCount, 0);
+
+    return {
+      total: totalEmployees,
+      fullTime: fullTimeCount,
+      contractor: contractorCount,
     };
   }
 

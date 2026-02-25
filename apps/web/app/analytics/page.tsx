@@ -73,7 +73,7 @@ export default function AnalyticsPage() {
   }, []);
 
   return (
-    <main className="analytics-page">
+    <main className="analytics-page coming-soon-lock">
       <header className="card">
         <h1>Analytics and Reports</h1>
         <p>Headcount, attendance, leave, payroll summary, and hiring funnel.</p>
@@ -118,6 +118,9 @@ export default function AnalyticsPage() {
           <pre>{csv || 'No CSV generated yet.'}</pre>
         </article>
       </section>
+      <div className="coming-soon-overlay">
+        <div className="coming-soon-text">Coming Soon</div>
+      </div>
     </main>
   );
 }

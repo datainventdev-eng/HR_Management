@@ -17,6 +17,7 @@ export class AuthService {
         full_name TEXT NOT NULL,
         role TEXT NOT NULL CHECK (role IN ('employee','manager','hr_admin')),
         employee_id TEXT,
+        employment_type TEXT NOT NULL DEFAULT 'full_time_employee' CHECK (employment_type IN ('full_time_employee','contractor')),
         must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
         password_hash TEXT NOT NULL,
         refresh_token_hash TEXT,
@@ -28,6 +29,17 @@ export class AuthService {
     await this.db.query(`
       ALTER TABLE app_users
       ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;
+    `);
+
+    await this.db.query(`
+      ALTER TABLE app_users
+      ADD COLUMN IF NOT EXISTS employment_type TEXT NOT NULL DEFAULT 'full_time_employee';
+    `);
+
+    await this.db.query(`
+      UPDATE app_users
+      SET employment_type = 'full_time_employee'
+      WHERE employment_type IS NULL OR employment_type = '';
     `);
 
     const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL;
@@ -54,6 +66,7 @@ export class AuthService {
       email: string;
       fullName: string;
       role: UserRole;
+      employmentType: 'full_time_employee' | 'contractor';
       employeeId?: string;
       joinDate?: string;
       departmentId?: string;
@@ -82,11 +95,11 @@ export class AuthService {
 
     const result = await this.db.query<AppUser>(
       `
-      INSERT INTO app_users (email, full_name, role, employee_id, must_change_password, password_hash)
-      VALUES ($1, $2, $3, $4, TRUE, $5)
+      INSERT INTO app_users (email, full_name, role, employee_id, employment_type, must_change_password, password_hash)
+      VALUES ($1, $2, $3, $4, $5, TRUE, $6)
       RETURNING *
       `,
-      [email, payload.fullName.trim(), payload.role, linkedEmployeeProfileId, passwordHash],
+      [email, payload.fullName.trim(), payload.role, linkedEmployeeProfileId, payload.employmentType, passwordHash],
     );
 
     const user = result.rows[0];
@@ -97,6 +110,7 @@ export class AuthService {
         fullName: user.full_name,
         role: user.role,
         employeeId: user.employee_id,
+        employmentType: user.employment_type,
         mustChangePassword: user.must_change_password,
       },
       temporaryPassword,
@@ -190,6 +204,7 @@ export class AuthService {
       fullName: user.full_name,
       role: user.role,
       employeeId: user.employee_id,
+      employmentType: user.employment_type,
       mustChangePassword: user.must_change_password,
     };
   }
@@ -234,6 +249,7 @@ export class AuthService {
         fullName: user.full_name,
         role: user.role,
         employeeId: user.employee_id,
+        employmentType: user.employment_type,
         mustChangePassword: user.must_change_password,
       },
       accessToken,

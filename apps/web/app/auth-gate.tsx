@@ -5,7 +5,7 @@ import { PropsWithChildren, useEffect, useState } from 'react';
 import { clearSession, defaultRouteForRole, getSession, setSession, SessionData } from './lib.session';
 
 const PUBLIC_ROUTES = ['/login'];
-const EMPLOYEE_ALLOWED_ROUTES = ['/employee', '/attendance-time', '/timesheets', '/leave-management', '/payroll', '/change-password'];
+const EMPLOYEE_ALLOWED_ROUTES = ['/employee', '/attendance-time', '/timesheets', '/leave-management', '/wfh', '/payroll', '/change-password', '/settings'];
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 export default function AuthGate({ children }: PropsWithChildren) {
